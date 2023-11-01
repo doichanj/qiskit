@@ -15,4 +15,4 @@ scipy<1.11
 # Aer 0.13 causes several randomised tests to begin failing, and some
 # `QuantumInstance` use of noise models to raise exceptions.  These need fixes
 # on Terra.
-qiskit-aer==0.12.2
+qiskit-aer
