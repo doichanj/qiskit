@@ -1,4 +1,4 @@
-name: Slow nightly tests
+name: Test with latest Aer
 on: push
 jobs:
   tests-with-latest-aer:
