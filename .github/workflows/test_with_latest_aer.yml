@@ -2,8 +2,7 @@ name: Test with latest Aer
 on: push
 jobs:
   tests-with-latest-aer:
-    if: github.repository_owner == 'Qiskit'
-    name: Full-test-run-with-slow
+    name: tests-with-latest-aer
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
