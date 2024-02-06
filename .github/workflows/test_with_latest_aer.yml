@@ -1,0 +1,27 @@
+name: Test with latest Aer
+on: push
+jobs:
+  tests-with-latest-aer:
+    name: tests-with-latest-aer
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-python@v4
+        name: Install Python
+        with:
+          python-version: '3.10'
+      - name: Install dependencies
+        run: |
+          python -m pip install -U pip setuptools wheel
+          python -m pip install -U -r requirements.txt -c constraints.txt
+          python -m pip install -U -r requirements-dev.txt -c constraints.txt
+          pip install -U git+https://github.com/Qiskit/qiskit-aer.git
+          python -m pip install -c constraints.txt -e .
+          python -m pip install "z3-solver" "cplex" -c constraints.txt
+        env:
+          SETUPTOOLS_ENABLE_FEATURES: "legacy-editable"
+      - name: Run all tests including slow
+        run: stestr run
+        env:
+          RUST_BACKTRACE: 1
+          QISKIT_TESTS: "run_slow"
