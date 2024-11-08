@@ -18,13 +18,14 @@ import numpy as np
 
 from qiskit.exceptions import QiskitError
 from qiskit.compiler import transpile
-from qiskit.circuit import QuantumCircuit, QuantumRegister
+from qiskit.circuit import QuantumCircuit, QuantumRegister, Parameter
 from qiskit.circuit.library import (
     MCMT,
     MCMTVChain,
     CHGate,
     XGate,
     ZGate,
+    RYGate,
     CXGate,
     CZGate,
     MCMTGate,
@@ -179,7 +180,9 @@ class TestMCMT(QiskitTestCase):
         gate = XGate()
         mcmt = MCMTGate(gate, num_controls, num_target)
 
-        hls = HighLevelSynthesis()
+        # make sure MCX-synthesis does not use ancilla qubits
+        config = HLSConfig(mcx=["noaux_v24"])
+        hls = HighLevelSynthesis(hls_config=config)
 
         # test a decomposition without sufficient ancillas for MCMT V-chain
         with self.subTest(msg="insufficient auxiliaries"):
@@ -263,6 +266,24 @@ class TestMCMT(QiskitTestCase):
             with self.subTest(gate=gate):
                 with self.assertRaises(ValueError):
                     _ = MCMTGate(gate, 10, 2)
+
+    def test_invalid_base_gate_width_synthfun(self):
+        """Test only 1-qubit base gates are accepted."""
+        for gate in [GlobalPhaseGate(0.2), SwapGate()]:
+            with self.subTest(gate=gate):
+                with self.assertRaises(ValueError):
+                    _ = synth_mcmt_vchain(gate, 10, 2)
+
+    def test_gate_with_parameters_vchain(self):
+        """Test a gate with parameters as base gate."""
+        theta = Parameter("th")
+        gate = RYGate(theta)
+        num_target = 3
+        circuit = synth_mcmt_vchain(gate, num_ctrl_qubits=10, num_target_qubits=num_target)
+
+        self.assertEqual(circuit.count_ops().get("cry", 0), num_target)
+        self.assertEqual(circuit.num_parameters, 1)
+        self.assertIs(circuit.parameters[0], theta)
 
 
 if __name__ == "__main__":
