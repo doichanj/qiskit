@@ -4,7 +4,6 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
-build = "build.rs"
 
 [lib]
 name = "qiskit_circuit"
@@ -21,10 +20,7 @@ numpy.workspace = true
 thiserror.workspace = true
 approx.workspace = true
 itertools.workspace = true
-
-[build-dependencies]
-bindgen = "0.65.1"
-conan2 = "0.1"
+nom = "7"
 
 [dependencies.pyo3]
 workspace = true
