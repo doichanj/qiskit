@@ -21,6 +21,8 @@ use nom::sequence::{delimited, pair};
 use nom::multi::{many0, many0_count};
 use nom::number::complete::double;
 
+use num_complex::c64;
+
 use std::rc::Rc;
 use std::cell::RefCell;
 use crate::symbol_expr::{SymbolExpr, BinaryOps, Symbol, Value, Unary, UnaryOps};
@@ -48,10 +50,23 @@ fn parse_value(s: &str) -> IResult<&str, BinaryOpContainer> {
     map_res(
         double,
         |v| -> Result<BinaryOpContainer, &str> {
-            Ok(BinaryOpContainer{op: BinaryOps::Nop, expr: SymbolExpr::Value( Value{value: v})})
+            Ok(BinaryOpContainer{op: BinaryOps::Nop, expr: SymbolExpr::Value( Value::Real(v))})
         }
     )(s)
 }
+
+fn parse_imaginary_value(s: &str) -> IResult<&str, BinaryOpContainer> {
+    map_res(
+        permutation((
+            double,
+            char('i'),
+        )),
+        |(v, _)| -> Result<BinaryOpContainer, &str> {
+            Ok(BinaryOpContainer{op: BinaryOps::Nop, expr: SymbolExpr::Value( Value::Complex(c64(0.0, v)))})
+        }
+    )(s)
+}
+
 
 fn parse_symbol_string(s: &str) -> IResult<&str, &str> {
     recognize(
@@ -103,6 +118,7 @@ fn parse_neg(s: &str) -> IResult<&str, BinaryOpContainer> {
         permutation((
             char('-'),
             alt((
+                parse_imaginary_value,
                 parse_value,
                 parse_unary,
                 parse_symbol,
@@ -121,6 +137,7 @@ fn parse_neg(s: &str) -> IResult<&str, BinaryOpContainer> {
 
 fn parse_expr(s: &str) -> IResult<&str, BinaryOpContainer> {
     alt((
+        parse_imaginary_value,
         parse_value,
         parse_neg,
         parse_unary,

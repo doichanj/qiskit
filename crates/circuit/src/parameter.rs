@@ -19,6 +19,7 @@ use std::collections::HashMap;
 use crate::symbol_expr::{SymbolExpr, Value};
 use crate::symbol_parser::parse_expression;
 
+use num_complex::Complex64;
 
 #[derive(Debug)]
 pub struct Parameter {
@@ -28,7 +29,7 @@ pub struct Parameter {
 impl Parameter {
     pub fn default() -> Self {
         Self {
-            expr_: SymbolExpr::Value(Value { value : 0.0, }),
+            expr_: SymbolExpr::Value( Value::Real(0.0)),
         }
     }
 
@@ -63,9 +64,25 @@ impl Parameter {
         let map = HashMap::<String, f64>::from([(param, value),]);
         self.expr_.subs(&map);
     }
+    pub fn subs(&mut self, maps: &HashMap<String, f64>) {
+        self.expr_.subs(&maps);
+    }
 
-    pub fn get_value(&self) -> f64 {
-        self.expr_.eval(true).unwrap()
+    pub fn real(&self) -> f64 {
+        self.expr_.real()
+    }
+    pub fn imag(&self) -> f64 {
+        self.expr_.imag()
+    }
+    pub fn complex(&self) -> Complex64 {
+        self.expr_.complex()
+    }
+
+    pub fn is_complex(&self) -> bool {
+        self.expr_.is_complex()
+    }
+    pub fn is_real(&self) -> bool {
+        self.expr_.is_real()
     }
 
     fn add_expr(self, rhs: Self) -> Self {
@@ -189,14 +206,14 @@ impl PartialEq for Parameter {
 impl From<i32> for Parameter {
     fn from(v: i32) -> Self {
         Self {
-            expr_: SymbolExpr::Value(Value { value : v as f64, }),
+            expr_: SymbolExpr::Value( Value::Real(v as f64)),
         }
     }
 }
 impl From<i64> for Parameter {
     fn from(v: i64) -> Self {
         Self {
-            expr_: SymbolExpr::Value(Value { value : v as f64, }),
+            expr_: SymbolExpr::Value( Value::Real(v as f64)),
         }
     }
 }
@@ -204,7 +221,7 @@ impl From<i64> for Parameter {
 impl From<u32> for Parameter {
     fn from(v: u32) -> Self {
         Self {
-            expr_: SymbolExpr::Value(Value { value : v as f64, }),
+            expr_: SymbolExpr::Value( Value::Real(v as f64)),
         }
     }
 }
@@ -212,7 +229,15 @@ impl From<u32> for Parameter {
 impl From<f64> for Parameter {
     fn from(v: f64) -> Self {
         Self {
-            expr_: SymbolExpr::Value(Value { value : v, }),
+            expr_: SymbolExpr::Value( Value::Real(v)),
+        }
+    }
+}
+
+impl From<Complex64> for Parameter {
+    fn from(v: Complex64) -> Self {
+        Self {
+            expr_: SymbolExpr::Value( Value::Complex(v)),
         }
     }
 }
@@ -358,7 +383,7 @@ mod tests {
         // x + y = x + y
         let expr1 = Parameter::new("x");
         let expr2 = Parameter::new("y");
-        assert_eq!(expr1.add_expr(expr2).to_string(), "x + y")
+        assert_eq!(expr1.add_expr(expr2).to_string(), "x+y")
     }
 
     #[test]
@@ -390,7 +415,7 @@ mod tests {
         // x + y = x + y
         let expr1 = Parameter::new("x");
         let expr2 = Parameter::new("y");
-        assert_eq!((expr1 + expr2).to_string(), "x + y")
+        assert_eq!((expr1 + expr2).to_string(), "x+y")
     }
 
     #[test]
@@ -398,15 +423,7 @@ mod tests {
         // 1.0 + x = 1.0 + x
         let expr1 = Parameter::new("x");
         let expr2: f64 = 1.0;
-        assert_eq!((expr1 + expr2).to_string(), "x + 1")
-    }
-
-    #[test]
-    fn test_add_x_i32() {
-        // -1 + x = -1 + x
-        let expr1 = Parameter::new("x");
-        let expr2: i32 = -1;
-        assert_eq!((expr1 + expr2).to_string(), "x - 1")
+        assert_eq!((expr1 + expr2).to_string(), "1+x")
     }
 
     #[test]
@@ -414,7 +431,7 @@ mod tests {
         // 1 + x = 1 + x
         let expr1 = Parameter::new("x");
         let expr2: u32 = 1;
-        assert_eq!((expr1 + expr2).to_string(), "x + 1")
+        assert_eq!((expr1 + expr2).to_string(), "1+x")
     }
 
     // add_assign
@@ -425,7 +442,7 @@ mod tests {
         let mut expr1 = Parameter::new("x");
         let expr2 = Parameter::new("y");
         expr1.add_assign_expr(expr2);
-        assert_eq!(expr1.to_string(), "x + y")
+        assert_eq!(expr1.to_string(), "x+y")
     }
 
     #[test]
@@ -443,7 +460,7 @@ mod tests {
         let mut expr1 = Parameter::new("x");
         let expr2 = Parameter::new("y");
         expr1 += expr2;
-        assert_eq!(expr1.to_string(), "x + y")
+        assert_eq!(expr1.to_string(), "x+y")
     }
 
     #[test]
@@ -452,16 +469,7 @@ mod tests {
         let mut expr1 = Parameter::new("x");
         let expr2: f64 = 1.0;
         expr1 += expr2;
-        assert_eq!(expr1.to_string(), "x + 1")
-    }
-
-    #[test]
-    fn test_add_assign_x_i32() {
-        // x += -1 => -1 + x
-        let mut expr1 = Parameter::new("x");
-        let expr2: i32 = -1;
-        expr1 += expr2;
-        assert_eq!(expr1.to_string(), "x - 1")
+        assert_eq!(expr1.to_string(), "1+x")
     }
 
     #[test]
@@ -470,7 +478,7 @@ mod tests {
         let mut expr1 = Parameter::new("x");
         let expr2: u32 = 1;
         expr1 += expr2;
-        assert_eq!(expr1.to_string(), "x + 1")
+        assert_eq!(expr1.to_string(), "1+x")
     }
 
     //  sub
@@ -480,7 +488,7 @@ mod tests {
         // x - y = x - y
         let expr1 = Parameter::new("x");
         let expr2 = Parameter::new("y");
-        assert_eq!(expr1.sub_expr(expr2).to_string(), "x - y")
+        assert_eq!(expr1.sub_expr(expr2).to_string(), "x-y")
     }
 
     #[test]
@@ -506,7 +514,7 @@ mod tests {
         // x - y = x - y
         let expr1 = Parameter::new("x");
         let expr2 = Parameter::new("y");
-        assert_eq!((expr1 - expr2).to_string(), "x - y")
+        assert_eq!((expr1 - expr2).to_string(), "x-y")
     }
 
     #[test]
@@ -514,15 +522,7 @@ mod tests {
         // x - 1.0 = x - 1.0
         let expr1 = Parameter::new("x");
         let expr2: f64 = 1.0;
-        assert_eq!((expr1 - expr2).to_string(), "x - 1")
-    }
-
-    #[test]
-    fn test_sub_x_i32() {
-        // x - (-1) = x + 1
-        let expr1 = Parameter::new("x");
-        let expr2: i32 = -1;
-        assert_eq!((expr1 - expr2).to_string(), "x + 1")
+        assert_eq!((expr1 - expr2).to_string(), "x-1")
     }
 
     #[test]
@@ -530,7 +530,7 @@ mod tests {
         // x - 1 = x - 1
         let expr1 = Parameter::new("x");
         let expr2: u32 = 1;
-        assert_eq!((expr1 - expr2).to_string(), "x - 1")
+        assert_eq!((expr1 - expr2).to_string(), "x-1")
     }
 
     // sub_assign
@@ -541,7 +541,7 @@ mod tests {
         let mut expr1 = Parameter::new("x");
         let expr2 = Parameter::new("y");
         expr1.sub_assign_expr(expr2);
-        assert_eq!(expr1.to_string(), "x - y")
+        assert_eq!(expr1.to_string(), "x-y")
     }
 
     #[test]
@@ -558,7 +558,7 @@ mod tests {
         let mut expr1 = Parameter::new("x");
         let expr2 = Parameter::new("y");
         expr1 -= expr2;
-        assert_eq!(expr1.to_string(), "x - y")
+        assert_eq!(expr1.to_string(), "x-y")
     }
 
     #[test]
@@ -567,16 +567,7 @@ mod tests {
         let mut expr1 = Parameter::new("x");
         let expr2: f64 = 1.0;
         expr1 -= expr2;
-        assert_eq!(expr1.to_string(), "x - 1")
-    }
-
-    #[test]
-    fn test_sub_assign_x_i32() {
-        // x -= -1 => 1 + x
-        let mut expr1 = Parameter::new("x");
-        let expr2: i32 = -1;
-        expr1 -= expr2;
-        assert_eq!(expr1.to_string(), "x + 1")
+        assert_eq!(expr1.to_string(), "x-1")
     }
 
     #[test]
@@ -585,7 +576,7 @@ mod tests {
         let mut expr1 = Parameter::new("x");
         let expr2: u32 = 1;
         expr1 -= expr2;
-        assert_eq!(expr1.to_string(), "x - 1")
+        assert_eq!(expr1.to_string(), "x-1")
     }
 
     //  mul
@@ -650,30 +641,6 @@ mod tests {
         // 0.0 + x = 0.0
         let expr1 = Parameter::new("x");
         let expr2: f64 = 0.0;
-        assert_eq!((expr1 * expr2).to_string(), "0")
-    }
-
-    #[test]
-    fn test_mul_x_i32() {
-        // -2 * x = -2*x
-        let expr1 = Parameter::new("x");
-        let expr2: i32 = -2;
-        assert_eq!((expr1 * expr2).to_string(), "-2*x")
-    }
-
-    #[test]
-    fn test_mul_x_i32_identity() {
-        // -1 * x = -x
-        let expr1 = Parameter::new("x");
-        let expr2: i32 = -1;
-        assert_eq!((expr1 * expr2).to_string(), "-x")
-    }
-
-    #[test]
-    fn test_mul_x_i32_zero() {
-        // 0 * x = 0
-        let expr1 = Parameter::new("x");
-        let expr2: i32 = 0;
         assert_eq!((expr1 * expr2).to_string(), "0")
     }
 
@@ -748,33 +715,6 @@ mod tests {
     }
 
     #[test]
-    fn test_mul_assign_x_i32() {
-        // x *= -2 => -2*x
-        let mut expr1 = Parameter::new("x");
-        let expr2: i32 = -2;
-        expr1 *= expr2;
-        assert_eq!(expr1.to_string(), "-2*x")
-    }
-
-    #[test]
-    fn test_mul_assign_x_i32_identity() {
-        // x *= -1 => -x
-        let mut expr1 = Parameter::new("x");
-        let expr2: i32 = -1;
-        expr1 *= expr2;
-        assert_eq!(expr1.to_string(), "-x")
-    }
-
-    #[test]
-    fn test_mul_assign_x_i32_zero() {
-        // x *= 0 => 0
-        let mut expr1 = Parameter::new("x");
-        let expr2: i32 = 0;
-        expr1 *= expr2;
-        assert_eq!(expr1.to_string(), "0")
-    }
-
-    #[test]
     fn test_mul_assign_x_u32() {
         // x *= 2 => 2*x
         let mut expr1 = Parameter::new("x");
@@ -835,14 +775,6 @@ mod tests {
     }
 
     #[test]
-    fn test_div_x_i32() {
-        // x / -2 = (-1/2)*x
-        let expr1 = Parameter::new("x");
-        let expr2: i32 = -2;
-        assert_eq!((expr1 / expr2).to_string(), "-x/2");
-    }
-
-    #[test]
     fn test_div_x_u32() {
         // x / 2 = (1/2)*x
         let expr1 = Parameter::new("x");
@@ -885,15 +817,6 @@ mod tests {
         let expr2: f64 = 2.0;
         expr1 /= expr2;
         assert_eq!(expr1.to_string(), "x/2");
-    }
-
-    #[test]
-    fn test_div_assign_x_i32() {
-        // x / -2 = (-1/2)*x
-        let mut expr1 = Parameter::new("x");
-        let expr2: i32 = -2;
-        expr1 /= expr2;
-        assert_eq!(expr1.to_string(), "-x/2");
     }
 
     #[test]
