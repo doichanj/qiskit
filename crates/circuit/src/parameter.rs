@@ -10,7 +10,7 @@
 // copyright notice, and modified files need to carry a notice indicating
 // that they have been altered from the originals.
 
-// ParameterExpression class using symengine C wrapper interface
+// ParameterExpression in Rust
 
 use std::convert::From;
 use std::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Sub, SubAssign, Neg};
@@ -23,7 +23,7 @@ use num_complex::Complex64;
 
 #[derive(Debug)]
 pub struct Parameter {
-    pub expr_: SymbolExpr,
+    expr_: SymbolExpr,
 }
 
 impl Parameter {
@@ -62,10 +62,10 @@ impl Parameter {
 
     pub fn bind(&mut self, param: String, value: f64) {
         let map = HashMap::<String, f64>::from([(param, value),]);
-        self.expr_.subs(&map);
+        self.expr_ = self.expr_.subs(&map);
     }
-    pub fn subs(&mut self, maps: &HashMap<String, f64>) {
-        self.expr_.subs(&maps);
+    pub fn subs(&mut self, map: &HashMap<String, f64>) -> Parameter {
+        Parameter{expr_: self.expr_.subs(&map)}
     }
 
     pub fn real(&self) -> f64 {
