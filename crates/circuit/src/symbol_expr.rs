@@ -10,8 +10,7 @@
 // copyright notice, and modified files need to carry a notice indicating
 // that they have been altered from the originals.
 
-use std::rc::Rc;
-use std::cell::RefCell;
+use std::sync::Arc;
 use std::ops::{Add, Div, Mul, Sub, Neg};
 use std::convert::From;
 use std::collections::{HashMap, HashSet};
@@ -22,13 +21,13 @@ use num_complex::Complex64;
 pub enum SymbolExpr {
     Symbol(Symbol),
     Value(Value),
-    Unary(Rc<RefCell<Unary>>),
-    Binary(Rc<RefCell<Binary>>),
+    Unary(Arc<Unary>),
+    Binary(Arc<Binary>),
 }
 
 #[derive(Debug, Clone)]
 pub struct Symbol {
-    pub name : String,
+    name : String,
 }
 
 // ================================
@@ -60,7 +59,6 @@ pub enum UnaryOps {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum BinaryOps {
-    Nop,
     Add,
     Sub,
     Mul,
@@ -70,15 +68,15 @@ pub enum BinaryOps {
 
 #[derive(Debug)]
 pub struct Unary {
-    pub op : UnaryOps,
-    pub expr : SymbolExpr,
+    op : UnaryOps,
+    expr : SymbolExpr,
 }
 
 #[derive(Debug)]
 pub struct Binary {
-    pub op : BinaryOps,
-    pub lhs : SymbolExpr,
-    pub rhs : SymbolExpr,
+    op : BinaryOps,
+    lhs : SymbolExpr,
+    rhs : SymbolExpr,
 }
 
 impl Clone for SymbolExpr {
@@ -86,8 +84,8 @@ impl Clone for SymbolExpr {
         match self {
             SymbolExpr::Symbol(e) => SymbolExpr::Symbol(e.clone()),
             SymbolExpr::Value(e) => SymbolExpr::Value(e.clone()),
-            SymbolExpr::Unary(e) => SymbolExpr::Unary( Rc::new(RefCell::new(e.borrow().clone())) ),
-            SymbolExpr::Binary(e) => SymbolExpr::Binary( Rc::new(RefCell::new(e.borrow().clone())) ),
+            SymbolExpr::Unary(e) => SymbolExpr::Unary(e.clone()),
+            SymbolExpr::Binary(e) => SymbolExpr::Binary(e.clone()),
         }
     }
 }
@@ -97,17 +95,17 @@ impl SymbolExpr {
         match self {
             SymbolExpr::Symbol(e) => e.to_string(),
             SymbolExpr::Value(e) => e.to_string(),
-            SymbolExpr::Unary(e) => e.borrow().to_string(),
-            SymbolExpr::Binary(e) => e.borrow().to_string(),
+            SymbolExpr::Unary(e) => e.to_string(),
+            SymbolExpr::Binary(e) => e.to_string(),
         }
     }
 
-    pub fn subs(&self, maps: &HashMap<String, f64>) -> SymbolExpr {
+    pub fn subs(&self, maps: &HashMap<String, SymbolExpr>) -> SymbolExpr {
         match self {
             SymbolExpr::Symbol(e) => e.subs(maps),
             SymbolExpr::Value(e) => SymbolExpr::Value(e.clone()),
-            SymbolExpr::Unary(e) => e.borrow().subs(maps),
-            SymbolExpr::Binary(e) => e.borrow().subs(maps),
+            SymbolExpr::Unary(e) => e.subs(maps),
+            SymbolExpr::Binary(e) => e.subs(maps),
         }
     }
 
@@ -115,8 +113,21 @@ impl SymbolExpr {
         match self {
             SymbolExpr::Symbol(_) => None,
             SymbolExpr::Value(e) => Some(e.clone()),
-            SymbolExpr::Unary(e) => e.borrow().eval(recurse),
-            SymbolExpr::Binary(e) => e.borrow().eval(recurse),
+            SymbolExpr::Unary(e) => e.eval(recurse),
+            SymbolExpr::Binary(e) => e.eval(recurse),
+        }
+    }
+
+    pub fn derivative(&self, param: &String) -> SymbolExpr {
+        match self {
+            SymbolExpr::Symbol(e) => if e.name == *param {
+                SymbolExpr::Value( Value::Real(1.0))
+            } else {
+                SymbolExpr::Value( Value::Real(0.0))
+            },
+            SymbolExpr::Value(e) => SymbolExpr::Value( Value::Real(0.0)),
+            SymbolExpr::Unary(e) => e.derivative(param),
+            SymbolExpr::Binary(e) => e.derivative(param),
         }
     }
 
@@ -152,8 +163,17 @@ impl SymbolExpr {
         match self {
             SymbolExpr::Symbol(e) => HashSet::<String>::from([e.name.clone()]),
             SymbolExpr::Value(_) => HashSet::<String>::new(),
-            SymbolExpr::Unary(e) => e.borrow().symbols(),
-            SymbolExpr::Binary(e) => e.borrow().symbols(),
+            SymbolExpr::Unary(e) => e.symbols(),
+            SymbolExpr::Binary(e) => e.symbols(),
+        }
+    }
+
+    pub fn has_symbol(&self, param: String) -> bool {
+        match self {
+            SymbolExpr::Symbol(e) => e.name == param,
+            SymbolExpr::Value(e) => false,
+            SymbolExpr::Unary(e) => e.has_symbol(param),
+            SymbolExpr::Binary(e) => e.has_symbol(param),
         }
     }
 
@@ -162,9 +182,9 @@ impl SymbolExpr {
             SymbolExpr::Symbol(e) => SymbolExpr::Value( Value::Real(1.0)) / SymbolExpr::Symbol(e),
             SymbolExpr::Value(e) => SymbolExpr::Value( Value::Real(1.0)) / SymbolExpr::Value(e),
             SymbolExpr::Unary(e) => SymbolExpr::Value( Value::Real(1.0)) / SymbolExpr::Unary(e),
-            SymbolExpr::Binary(ref e) => match e.borrow().op {
-                BinaryOps::Div => SymbolExpr::Binary( Rc::new(RefCell::new( Binary{ op: e.borrow().op.clone(), lhs: e.borrow().rhs.clone(), rhs: e.borrow().lhs.clone()})) ),
-                _ => SymbolExpr::Binary( Rc::new(RefCell::new( Binary{ op: BinaryOps::Div, lhs: SymbolExpr::Value( Value::Real(1.0)), rhs: self.clone()})) ),
+            SymbolExpr::Binary(ref e) => match e.op {
+                BinaryOps::Div => SymbolExpr::Binary( Arc::new( Binary{ op: e.op.clone(), lhs: e.rhs.clone(), rhs: e.lhs.clone()}) ),
+                _ => SymbolExpr::Binary( Arc::new( Binary{ op: BinaryOps::Div, lhs: SymbolExpr::Value( Value::Real(1.0)), rhs: self.clone()}) ),
             }
         }
     }
@@ -176,8 +196,8 @@ impl SymbolExpr {
                 Value::Complex(c) => SymbolExpr::Value( Value::Complex(c.conj())),
                 _ => SymbolExpr::Value( e.clone()),
             },
-            SymbolExpr::Unary(e) => SymbolExpr::Unary( Rc::new(RefCell::new( Unary{ op: e.borrow().op.clone(), expr: e.borrow().expr.conjugate()})) ),
-            SymbolExpr::Binary(e) => SymbolExpr::Binary( Rc::new(RefCell::new( Binary{ op: e.borrow().op.clone(), lhs: e.borrow().lhs.conjugate(), rhs: e.borrow().rhs.conjugate()})) ),
+            SymbolExpr::Unary(e) => SymbolExpr::Unary( Arc::new( Unary{ op: e.op.clone(), expr: e.expr.conjugate()}) ),
+            SymbolExpr::Binary(e) => SymbolExpr::Binary( Arc::new( Binary{ op: e.op.clone(), lhs: e.lhs.conjugate(), rhs: e.rhs.conjugate()}) ),
         }
     }
 
@@ -188,8 +208,8 @@ impl SymbolExpr {
                 Value::Complex(_) => true,
                 _ => false,
             },
-            SymbolExpr::Unary(e) => e.borrow().expr.is_complex(),
-            SymbolExpr::Binary(e) => e.borrow().lhs.is_complex() || e.borrow().rhs.is_complex(),
+            SymbolExpr::Unary(e) => e.expr.is_complex(),
+            SymbolExpr::Binary(e) => e.lhs.is_complex() || e.rhs.is_complex(),
         }
     }
     pub fn is_real(&self) -> bool {
@@ -199,82 +219,82 @@ impl SymbolExpr {
                 Value::Real(_) => true,
                 _ => false,
             },
-            SymbolExpr::Unary(e) => e.borrow().expr.is_real(),
-            SymbolExpr::Binary(e) => e.borrow().lhs.is_real() && e.borrow().rhs.is_real(),
+            SymbolExpr::Unary(e) => e.expr.is_real(),
+            SymbolExpr::Binary(e) => e.lhs.is_real() && e.rhs.is_real(),
         }
     }
 
     pub fn abs(self) -> SymbolExpr {
         match self {
             SymbolExpr::Value(l) => SymbolExpr::Value( l.abs()),
-            _ => SymbolExpr::Unary( Rc::new(RefCell::new(Unary{ op: UnaryOps::Abs, expr: self.clone()} ))),
+            _ => SymbolExpr::Unary( Arc::new(Unary{ op: UnaryOps::Abs, expr: self.clone()} )),
         }
     }
     pub fn sin(self) -> SymbolExpr {
         match self {
             SymbolExpr::Value(l) => SymbolExpr::Value( l.sin()),
-            _ => SymbolExpr::Unary( Rc::new(RefCell::new(Unary{ op: UnaryOps::Sin, expr: self.clone()} ))),
+            _ => SymbolExpr::Unary( Arc::new(Unary{ op: UnaryOps::Sin, expr: self.clone()} )),
         }
     }
     pub fn asin(self) -> SymbolExpr {
         match self {
             SymbolExpr::Value(l) => SymbolExpr::Value( l.asin()),
-            _ => SymbolExpr::Unary( Rc::new(RefCell::new(Unary{ op: UnaryOps::Asin, expr: self.clone()} ))),
+            _ => SymbolExpr::Unary( Arc::new(Unary{ op: UnaryOps::Asin, expr: self.clone()} )),
         }
     }
     pub fn cos(self) -> SymbolExpr {
         match self {
             SymbolExpr::Value(l) => SymbolExpr::Value( l.cos()),
-            _ => SymbolExpr::Unary( Rc::new(RefCell::new(Unary{ op: UnaryOps::Cos, expr: self.clone()} ))),
+            _ => SymbolExpr::Unary( Arc::new(Unary{ op: UnaryOps::Cos, expr: self.clone()} )),
         }
     }
     pub fn acos(self) -> SymbolExpr {
         match self {
             SymbolExpr::Value(l) => SymbolExpr::Value( l.acos()),
-            _ => SymbolExpr::Unary( Rc::new(RefCell::new(Unary{ op: UnaryOps::Acos, expr: self.clone()} ))),
+            _ => SymbolExpr::Unary( Arc::new(Unary{ op: UnaryOps::Acos, expr: self.clone()} )),
         }
     }
     pub fn tan(self) -> SymbolExpr {
         match self {
             SymbolExpr::Value(l) => SymbolExpr::Value( l.tan()),
-            _ => SymbolExpr::Unary( Rc::new(RefCell::new(Unary{ op: UnaryOps::Tan, expr: self.clone()} ))),
+            _ => SymbolExpr::Unary( Arc::new(Unary{ op: UnaryOps::Tan, expr: self.clone()} )),
         }
     }
     pub fn atan(self) -> SymbolExpr {
         match self {
             SymbolExpr::Value(l) => SymbolExpr::Value( l.atan()),
-            _ => SymbolExpr::Unary( Rc::new(RefCell::new(Unary{ op: UnaryOps::Atan, expr: self.clone()} ))),
+            _ => SymbolExpr::Unary( Arc::new(Unary{ op: UnaryOps::Atan, expr: self.clone()} )),
         }
     }
     pub fn exp(self) -> SymbolExpr {
         match self {
             SymbolExpr::Value(l) => SymbolExpr::Value( l.exp()),
-            _ => SymbolExpr::Unary( Rc::new(RefCell::new(Unary{ op: UnaryOps::Exp, expr: self.clone()} ))),
+            _ => SymbolExpr::Unary( Arc::new(Unary{ op: UnaryOps::Exp, expr: self.clone()} )),
         }
     }
     pub fn log(self) -> SymbolExpr {
         match self {
             SymbolExpr::Value(l) => SymbolExpr::Value( l.log()),
-            _ => SymbolExpr::Unary( Rc::new(RefCell::new(Unary{ op: UnaryOps::Log, expr: self.clone()} ))),
+            _ => SymbolExpr::Unary( Arc::new(Unary{ op: UnaryOps::Log, expr: self.clone()} )),
         }
     }
     pub fn pow(self, rhs: SymbolExpr) -> SymbolExpr {
         match self {
             SymbolExpr::Value(l) => match rhs {
                 SymbolExpr::Value(r) => SymbolExpr::Value( l.pow(r)),
-                _ => SymbolExpr::Binary( Rc::new(RefCell::new( Binary{ op: BinaryOps::Pow, lhs: SymbolExpr::Value(l.clone()), rhs: rhs.clone()})) ),
+                _ => SymbolExpr::Binary( Arc::new(Binary{ op: BinaryOps::Pow, lhs: SymbolExpr::Value(l.clone()), rhs: rhs.clone()}) ),
             },
-            _ => SymbolExpr::Binary( Rc::new(RefCell::new(Binary{ op: BinaryOps::Pow, lhs: self.clone(), rhs: rhs.clone()} ))),
+            _ => SymbolExpr::Binary( Arc::new(Binary{ op: BinaryOps::Pow, lhs: self.clone(), rhs: rhs.clone()} )),
         }
     }
 
     // Add with heuristic optimization
     fn add_opt(&self, rhs: &SymbolExpr) -> Option<SymbolExpr> {
         match self {
-            SymbolExpr::Unary(e) => e.borrow().add_opt(rhs),
-            SymbolExpr::Binary(e) => e.borrow().add_opt(rhs),
+            SymbolExpr::Unary(e) => e.add_opt(rhs),
+            SymbolExpr::Binary(e) => e.add_opt(rhs),
             _ => match rhs {
-                SymbolExpr::Binary(r) => r.borrow().add_opt(self),
+                SymbolExpr::Binary(r) => r.add_opt(self),
                 _ => None,
             },
         }
@@ -282,10 +302,10 @@ impl SymbolExpr {
     // Sub with heuristic optimization
     fn sub_opt(&self, rhs: &SymbolExpr) -> Option<SymbolExpr> {
         match self {
-            SymbolExpr::Unary(e) => e.borrow().sub_opt(rhs),
-            SymbolExpr::Binary(e) => e.borrow().sub_opt(rhs),
+            SymbolExpr::Unary(e) => e.sub_opt(rhs),
+            SymbolExpr::Binary(e) => e.sub_opt(rhs),
             _ => match rhs {
-                SymbolExpr::Binary(r) => match r.borrow().sub_opt(self) {
+                SymbolExpr::Binary(r) => match r.sub_opt(self) {
                     Some(e) => Some(-e),
                     _ => None,
                 },
@@ -297,7 +317,7 @@ impl SymbolExpr {
     fn mul_opt(&self, rhs: &SymbolExpr) -> Option<SymbolExpr> {
         match self {
             SymbolExpr::Unary(_) => None,   //TO DO add this
-            SymbolExpr::Binary(e) => e.borrow().mul_opt(rhs),
+            SymbolExpr::Binary(e) => e.mul_opt(rhs),
             _ => None,
         }
     }
@@ -305,7 +325,7 @@ impl SymbolExpr {
     fn div_opt(&self, rhs: &SymbolExpr) -> Option<SymbolExpr> {
         match self {
             SymbolExpr::Unary(_) => None,   //TO DO add this
-            SymbolExpr::Binary(e) => e.borrow().div_opt(rhs),
+            SymbolExpr::Binary(e) => e.div_opt(rhs),
             _ => None,
         }
     }
@@ -328,33 +348,33 @@ impl Add for &SymbolExpr {
         } else if *self == *rhs {
             match self {
                 SymbolExpr::Value(l) => SymbolExpr::Value(l * &Value::Real(2.0)),
-                _ => SymbolExpr::Binary( Rc::new(RefCell::new(Binary{ op: BinaryOps::Mul, lhs: SymbolExpr::Value( Value::Real(2.0)), rhs: self.clone()} ))),
+                _ => SymbolExpr::Binary( Arc::new(Binary{ op: BinaryOps::Mul, lhs: SymbolExpr::Value( Value::Real(2.0)), rhs: self.clone()} )),
             }
         } else {
             match self {
                 SymbolExpr::Value(l) => match rhs {
                     SymbolExpr::Value(r) => SymbolExpr::Value(l + r),
-                    SymbolExpr::Binary(r) => match r.borrow().add_opt(self) {
+                    SymbolExpr::Binary(r) => match r.add_opt(self) {
                         Some(e) => e,
-                        None => SymbolExpr::Binary( Rc::new(RefCell::new( Binary{ op: BinaryOps::Add, lhs: SymbolExpr::Value(l.clone()), rhs: rhs.clone()})) ),
+                        None => SymbolExpr::Binary( Arc::new(Binary{ op: BinaryOps::Add, lhs: SymbolExpr::Value(l.clone()), rhs: rhs.clone()})),
                     },
-                    _ => SymbolExpr::Binary( Rc::new(RefCell::new( Binary{ op: BinaryOps::Add, lhs: SymbolExpr::Value(l.clone()), rhs: rhs.clone()})) ),
+                    _ => SymbolExpr::Binary( Arc::new( Binary{ op: BinaryOps::Add, lhs: SymbolExpr::Value(l.clone()), rhs: rhs.clone()})),
                 },
                 SymbolExpr::Symbol(_) => match rhs {
-                    SymbolExpr::Value(r) => SymbolExpr::Binary( Rc::new(RefCell::new( Binary{ op: BinaryOps::Add, lhs: SymbolExpr::Value(r.clone()), rhs: self.clone()})) ),
-                    SymbolExpr::Binary(r) => match r.borrow().clone().add_opt(self) {
+                    SymbolExpr::Value(r) => SymbolExpr::Binary( Arc::new(Binary{ op: BinaryOps::Add, lhs: SymbolExpr::Value(r.clone()), rhs: self.clone()})),
+                    SymbolExpr::Binary(r) => match r.clone().add_opt(self) {
                         Some(e) => e,
-                        None => SymbolExpr::Binary( Rc::new(RefCell::new( Binary{ op: BinaryOps::Add, lhs: self.clone(), rhs: rhs.clone()})) ),
+                        None => SymbolExpr::Binary( Arc::new(Binary{ op: BinaryOps::Add, lhs: self.clone(), rhs: rhs.clone()})),
                     },
-                    _ => SymbolExpr::Binary( Rc::new(RefCell::new( Binary{ op: BinaryOps::Add, lhs: self.clone(), rhs: rhs.clone()})) ),
+                    _ => SymbolExpr::Binary( Arc::new(Binary{ op: BinaryOps::Add, lhs: self.clone(), rhs: rhs.clone()})),
                 },
-                SymbolExpr::Unary(l) => match l.borrow().op {
-                    UnaryOps::Neg => rhs - &l.borrow().expr,
-                    _=> SymbolExpr::Binary( Rc::new(RefCell::new( Binary{ op: BinaryOps::Add, lhs: self.clone(), rhs: rhs.clone()})) ),
+                SymbolExpr::Unary(l) => match l.op {
+                    UnaryOps::Neg => rhs - &l.expr,
+                    _=> SymbolExpr::Binary( Arc::new(Binary{ op: BinaryOps::Add, lhs: self.clone(), rhs: rhs.clone()})),
                 },
-                SymbolExpr::Binary(l) => match l.borrow().add_opt(rhs) {
+                SymbolExpr::Binary(l) => match l.add_opt(rhs) {
                     Some(e) => e,
-                    None => SymbolExpr::Binary( Rc::new(RefCell::new( Binary{ op: BinaryOps::Add, lhs: self.clone(), rhs: rhs.clone()})) ),
+                    None => SymbolExpr::Binary( Arc::new(Binary{ op: BinaryOps::Add, lhs: self.clone(), rhs: rhs.clone()}) ),
                 }
             }
         }
@@ -381,26 +401,26 @@ impl Sub for &SymbolExpr {
             match self {
                 SymbolExpr::Value(l) => match rhs {
                     SymbolExpr::Value(r) => SymbolExpr::Value(l - r),
-                    SymbolExpr::Binary(r) => match r.borrow().sub_opt(self) {
+                    SymbolExpr::Binary(r) => match r.sub_opt(self) {
                         Some(e) => -e,
-                        None => SymbolExpr::Binary( Rc::new(RefCell::new( Binary{ op: BinaryOps::Sub, lhs: SymbolExpr::Value(l.clone()), rhs: rhs.clone()})) ),
+                        None => SymbolExpr::Binary( Arc::new(Binary{ op: BinaryOps::Sub, lhs: SymbolExpr::Value(l.clone()), rhs: rhs.clone()}) ),
                     },
-                    _ => SymbolExpr::Binary( Rc::new(RefCell::new( Binary{ op: BinaryOps::Sub, lhs: SymbolExpr::Value(l.clone()), rhs: rhs.clone()})) ),
+                    _ => SymbolExpr::Binary( Arc::new(Binary{ op: BinaryOps::Sub, lhs: SymbolExpr::Value(l.clone()), rhs: rhs.clone()}) ),
                 },
                 SymbolExpr::Symbol(_) => match rhs {
-                    SymbolExpr::Binary(r) => match r.borrow().sub_opt(self) {
+                    SymbolExpr::Binary(r) => match r.sub_opt(self) {
                         Some(e) => -e,
-                        None => SymbolExpr::Binary( Rc::new(RefCell::new( Binary{ op: BinaryOps::Sub, lhs: self.clone(), rhs: rhs.clone()})) ),
+                        None => SymbolExpr::Binary( Arc::new(Binary{ op: BinaryOps::Sub, lhs: self.clone(), rhs: rhs.clone()}) ),
                     },
-                    _ => SymbolExpr::Binary( Rc::new(RefCell::new( Binary{ op: BinaryOps::Sub, lhs: self.clone(), rhs: rhs.clone()})) ),
+                    _ => SymbolExpr::Binary( Arc::new(Binary{ op: BinaryOps::Sub, lhs: self.clone(), rhs: rhs.clone()}) ),
                 },
-                SymbolExpr::Unary(l) => match l.borrow().op {
-                    UnaryOps::Neg => -&(rhs + &l.borrow().expr),
-                    _=> SymbolExpr::Binary( Rc::new(RefCell::new( Binary{ op: BinaryOps::Sub, lhs: self.clone(), rhs: rhs.clone()})) ),
+                SymbolExpr::Unary(l) => match l.op {
+                    UnaryOps::Neg => -&(rhs + &l.expr),
+                    _=> SymbolExpr::Binary( Arc::new(Binary{ op: BinaryOps::Sub, lhs: self.clone(), rhs: rhs.clone()}) ),
                 },
-                SymbolExpr::Binary(l) => match l.borrow().sub_opt(rhs) {
+                SymbolExpr::Binary(l) => match l.sub_opt(rhs) {
                     Some(e) => e,
-                    None => SymbolExpr::Binary( Rc::new(RefCell::new( Binary{ op: BinaryOps::Sub, lhs: self.clone(), rhs: rhs.clone()})) ),
+                    None => SymbolExpr::Binary( Arc::new(Binary{ op: BinaryOps::Sub, lhs: self.clone(), rhs: rhs.clone()}) ),
                 }
             }
         }
@@ -429,27 +449,27 @@ impl Mul for &SymbolExpr {
             match self {
                 SymbolExpr::Value(l) => match rhs {
                     SymbolExpr::Value(r) => SymbolExpr::Value(l * r),
-                    SymbolExpr::Binary(r) => match r.borrow().mul_opt(self) {
+                    SymbolExpr::Binary(r) => match r.mul_opt(self) {
                         Some(e) => e,
-                        None => SymbolExpr::Binary( Rc::new(RefCell::new( Binary{ op: BinaryOps::Mul, lhs: SymbolExpr::Value(l.clone()), rhs: rhs.clone()})) ),
+                        None => SymbolExpr::Binary( Arc::new(Binary{ op: BinaryOps::Mul, lhs: SymbolExpr::Value(l.clone()), rhs: rhs.clone()}) ),
                     },
-                    _ => SymbolExpr::Binary( Rc::new(RefCell::new( Binary{ op: BinaryOps::Mul, lhs: SymbolExpr::Value(l.clone()), rhs: rhs.clone()})) ),
+                    _ => SymbolExpr::Binary( Arc::new(Binary{ op: BinaryOps::Mul, lhs: SymbolExpr::Value(l.clone()), rhs: rhs.clone()}) ),
                 },
                 SymbolExpr::Symbol(_) => match rhs {
-                    SymbolExpr::Value(r) => SymbolExpr::Binary( Rc::new(RefCell::new( Binary{ op: BinaryOps::Mul, lhs: SymbolExpr::Value(r.clone()), rhs: self.clone()})) ),
-                    SymbolExpr::Binary(r) => match r.borrow().clone().mul_opt(self) {
+                    SymbolExpr::Value(r) => SymbolExpr::Binary( Arc::new( Binary{ op: BinaryOps::Mul, lhs: SymbolExpr::Value(r.clone()), rhs: self.clone()}) ),
+                    SymbolExpr::Binary(r) => match r.clone().mul_opt(self) {
                         Some(e) => e,
-                        None => SymbolExpr::Binary( Rc::new(RefCell::new( Binary{ op: BinaryOps::Mul, lhs: self.clone(), rhs: rhs.clone()})) ),
+                        None => SymbolExpr::Binary( Arc::new( Binary{ op: BinaryOps::Mul, lhs: self.clone(), rhs: rhs.clone()})),
                     },
-                    _ => SymbolExpr::Binary( Rc::new(RefCell::new( Binary{ op: BinaryOps::Mul, lhs: self.clone(), rhs: rhs.clone()})) ),
+                    _ => SymbolExpr::Binary( Arc::new(Binary{ op: BinaryOps::Mul, lhs: self.clone(), rhs: rhs.clone()}) ),
                 },
-                SymbolExpr::Unary(l) => match l.borrow().op {
-                    UnaryOps::Neg => -(rhs * &l.borrow().expr),
-                    _=> SymbolExpr::Binary( Rc::new(RefCell::new( Binary{ op: BinaryOps::Mul, lhs: self.clone(), rhs: rhs.clone()})) ),
+                SymbolExpr::Unary(l) => match l.op {
+                    UnaryOps::Neg => -(rhs * &l.expr),
+                    _=> SymbolExpr::Binary( Arc::new( Binary{ op: BinaryOps::Mul, lhs: self.clone(), rhs: rhs.clone()}) ),
                 },
-                SymbolExpr::Binary(l) => match l.borrow().mul_opt(rhs) {
+                SymbolExpr::Binary(l) => match l.mul_opt(rhs) {
                     Some(e) => e,
-                    None => SymbolExpr::Binary( Rc::new(RefCell::new( Binary{ op: BinaryOps::Mul, lhs: self.clone(), rhs: rhs.clone()})) ),
+                    None => SymbolExpr::Binary( Arc::new(Binary{ op: BinaryOps::Mul, lhs: self.clone(), rhs: rhs.clone()}) ),
                 }
             }
         }
@@ -480,27 +500,27 @@ impl Div for &SymbolExpr {
             match self {
                 SymbolExpr::Value(l) => match rhs {
                     SymbolExpr::Value(r) => SymbolExpr::Value(l / r),
-                    SymbolExpr::Binary(r) => match r.borrow().div_opt(self) {
+                    SymbolExpr::Binary(r) => match r.div_opt(self) {
                         Some(e) => e.rcp(),
-                        None => SymbolExpr::Binary( Rc::new(RefCell::new( Binary{ op: BinaryOps::Div, lhs: SymbolExpr::Value(l.clone()), rhs: rhs.clone()})) ),
+                        None => SymbolExpr::Binary( Arc::new( Binary{ op: BinaryOps::Div, lhs: SymbolExpr::Value(l.clone()), rhs: rhs.clone()}) ),
                     },
-                    _ => SymbolExpr::Binary( Rc::new(RefCell::new( Binary{ op: BinaryOps::Div, lhs: SymbolExpr::Value(l.clone()), rhs: rhs.clone()})) ),
+                    _ => SymbolExpr::Binary( Arc::new( Binary{ op: BinaryOps::Div, lhs: SymbolExpr::Value(l.clone()), rhs: rhs.clone()}) ),
                 },
                 SymbolExpr::Symbol(_) => match rhs {
-                    SymbolExpr::Value(r) => SymbolExpr::Binary( Rc::new(RefCell::new( Binary{ op: BinaryOps::Div, lhs: self.clone(), rhs: SymbolExpr::Value(r.clone())})) ),
-                    SymbolExpr::Binary(r) => match r.borrow().clone().div_opt(self) {
+                    SymbolExpr::Value(r) => SymbolExpr::Binary( Arc::new( Binary{ op: BinaryOps::Div, lhs: self.clone(), rhs: SymbolExpr::Value(r.clone())}) ),
+                    SymbolExpr::Binary(r) => match r.clone().div_opt(self) {
                         Some(e) => e.rcp(),
-                        None => SymbolExpr::Binary( Rc::new(RefCell::new( Binary{ op: BinaryOps::Div, lhs: self.clone(), rhs: rhs.clone()})) ),
+                        None => SymbolExpr::Binary( Arc::new( Binary{ op: BinaryOps::Div, lhs: self.clone(), rhs: rhs.clone()}) ),
                     },
-                    _ => SymbolExpr::Binary( Rc::new(RefCell::new( Binary{ op: BinaryOps::Div, lhs: self.clone(), rhs: rhs.clone()})) ),
+                    _ => SymbolExpr::Binary( Arc::new( Binary{ op: BinaryOps::Div, lhs: self.clone(), rhs: rhs.clone()}) ),
                 },
-                SymbolExpr::Unary(l) => match l.borrow().op {
-                    UnaryOps::Neg => -(&l.borrow().expr / rhs),
-                    _=> SymbolExpr::Binary( Rc::new(RefCell::new( Binary{ op: BinaryOps::Div, lhs: self.clone(), rhs: rhs.clone()})) ),
+                SymbolExpr::Unary(l) => match l.op {
+                    UnaryOps::Neg => -(&l.expr / rhs),
+                    _=> SymbolExpr::Binary( Arc::new( Binary{ op: BinaryOps::Div, lhs: self.clone(), rhs: rhs.clone()}) ),
                 },
-                SymbolExpr::Binary(l) => match l.borrow().div_opt(rhs) {
+                SymbolExpr::Binary(l) => match l.div_opt(rhs) {
                     Some(e) => e,
-                    None => SymbolExpr::Binary( Rc::new(RefCell::new( Binary{ op: BinaryOps::Div, lhs: self.clone(), rhs: rhs.clone()})) ),
+                    None => SymbolExpr::Binary( Arc::new( Binary{ op: BinaryOps::Div, lhs: self.clone(), rhs: rhs.clone()}) ),
                 }
             }
         }
@@ -519,15 +539,15 @@ impl Neg for &SymbolExpr {
     fn neg(self) -> SymbolExpr {
         match self {
             SymbolExpr::Value(l) => SymbolExpr::Value( -l),
-            SymbolExpr::Unary(e) => match e.borrow().op {
-                UnaryOps::Neg => e.borrow().expr.clone(),
-                _ => SymbolExpr::Unary( Rc::new(RefCell::new(Unary{ op: UnaryOps::Neg, expr: self.clone()} ))),
+            SymbolExpr::Unary(e) => match e.op {
+                UnaryOps::Neg => e.expr.clone(),
+                _ => SymbolExpr::Unary( Arc::new(Unary{ op: UnaryOps::Neg, expr: self.clone()} )),
             },
-            SymbolExpr::Binary(e) => match e.borrow().op {
-                BinaryOps::Sub => SymbolExpr::Binary( Rc::new(RefCell::new( Binary{ op: BinaryOps::Sub, lhs: e.borrow().rhs.clone(), rhs: e.borrow().lhs.clone()})) ),
-                _ => SymbolExpr::Unary( Rc::new(RefCell::new(Unary{ op: UnaryOps::Neg, expr: self.clone()} ))),
+            SymbolExpr::Binary(e) => match e.op {
+                BinaryOps::Sub => SymbolExpr::Binary( Arc::new( Binary{ op: BinaryOps::Sub, lhs: e.rhs.clone(), rhs: e.lhs.clone()}) ),
+                _ => SymbolExpr::Unary( Arc::new(Unary{ op: UnaryOps::Neg, expr: self.clone()} )),
             }
-            _ => SymbolExpr::Unary( Rc::new(RefCell::new(Unary{ op: UnaryOps::Neg, expr: self.clone()} ))),
+            _ => SymbolExpr::Unary( Arc::new(Unary{ op: UnaryOps::Neg, expr: self.clone()} )),
         }
     }
 }
@@ -567,9 +587,9 @@ impl Symbol {
         self.name.clone()
     }
 
-    pub fn subs(&self, maps: &HashMap<String, f64>) -> SymbolExpr {
+    pub fn subs(&self, maps: &HashMap<String, SymbolExpr>) -> SymbolExpr {
         match maps.get(&self.name) {
-            Some(v) => SymbolExpr::Value( Value::Real(*v)),
+            Some(v) => v.clone(),
             None =>  SymbolExpr::Symbol(self.clone()),
         }
     }
@@ -656,6 +676,12 @@ impl Value {
         match self {
             Value::Real(e) => Value::Real(e.ln()),
             Value::Complex(e) => Value::Complex(e.ln()),
+        }
+    }
+    pub fn sqrt(self) -> Value {
+        match self {
+            Value::Real(e) => Value::Real(e.sqrt()),
+            Value::Complex(e) => Value::Complex(e.sqrt()),
         }
     }
     pub fn pow(self, p: Value) -> Value {
@@ -823,13 +849,16 @@ impl Clone for Unary {
 }
 
 impl Unary {
+    pub fn new(op: UnaryOps, expr: SymbolExpr) -> Self {
+        Self { op: op, expr: expr}
+    }
     pub fn to_string(&self) -> String {
         let s = self.expr.to_string();
         match self.op {
             UnaryOps::Abs => String::from(format!("abs({})", s)),
             UnaryOps::Neg => match &self.expr {
                 SymbolExpr::Value(e) => String::from(format!("{}", (-e.clone()).to_string())),
-                SymbolExpr::Binary(e) => match e.borrow().op {
+                SymbolExpr::Binary(e) => match e.op {
                     BinaryOps::Add | BinaryOps::Sub => String::from(format!("-({})", s)),
                     _ => String::from(format!("-{}", s)),
                 },
@@ -846,12 +875,54 @@ impl Unary {
         }
     }
 
-    pub fn subs(&self, maps: &HashMap<String, f64>) -> SymbolExpr {
+    pub fn subs(&self, maps: &HashMap<String, SymbolExpr>) -> SymbolExpr {
         let new_expr = Unary{ op: self.op.clone(), expr: self.expr.subs(maps),};
         match new_expr.clone().eval(false) {
             Some(v) => SymbolExpr::Value(v.clone()),
-            None => SymbolExpr::Unary( Rc::new(RefCell::new(new_expr)))
+            None => SymbolExpr::Unary( Arc::new(new_expr))
         }
+    }
+
+    pub fn derivative(&self, param: &String) -> SymbolExpr {
+        let expr_d = self.expr.derivative(param);
+        match self.op {
+            UnaryOps::Abs => self.expr.clone() * expr_d / SymbolExpr::Unary( Arc::new( Unary {op: self.op.clone(), expr: self.expr.clone()})),
+            UnaryOps::Neg => SymbolExpr::Unary( Arc::new( Unary {op: UnaryOps::Neg, expr: expr_d})),
+            UnaryOps::Sin => {
+                let lhs = SymbolExpr::Unary( Arc::new( Unary {op: UnaryOps::Cos, expr: self.expr.clone()}));
+                lhs * expr_d
+            },
+            UnaryOps::Asin => {
+                let d = SymbolExpr::Value( Value::Real(1.0)) - self.expr.clone() * self.expr.clone();
+                let lhs = match d {
+                    SymbolExpr::Value(v) => SymbolExpr::Value(v.sqrt()),
+                    _ => SymbolExpr::Binary( Arc::new( Binary {op: BinaryOps::Pow, lhs: d, rhs: SymbolExpr::Value( Value::Real(0.5))} )),
+                };
+                lhs * expr_d
+            },
+            UnaryOps::Cos => {
+                let lhs = SymbolExpr::Unary( Arc::new( Unary {op: UnaryOps::Sin, expr: self.expr.clone()}));
+                -lhs * expr_d
+            },
+            UnaryOps::Acos => {
+                let d = SymbolExpr::Value( Value::Real(1.0)) - self.expr.clone() * self.expr.clone();
+                let lhs = match d {
+                    SymbolExpr::Value(v) => SymbolExpr::Value(v.sqrt()),
+                    _ => SymbolExpr::Binary( Arc::new( Binary {op: BinaryOps::Pow, lhs: d, rhs: SymbolExpr::Value( Value::Real(0.5))} )),
+                };
+                -lhs * expr_d
+            },
+            UnaryOps::Tan =>  {
+                let d = SymbolExpr::Unary( Arc::new( Unary {op: UnaryOps::Cos, expr: self.expr.clone()}));
+                expr_d / d.clone() / d
+            },
+            UnaryOps::Atan => {
+                let d = SymbolExpr::Value( Value::Real(1.0)) + self.expr.clone() * self.expr.clone();
+                expr_d / d
+            },
+            UnaryOps::Exp => SymbolExpr::Unary( Arc::new( Unary {op: UnaryOps::Exp, expr: self.expr.clone()})) * expr_d,
+            UnaryOps::Log => expr_d / self.expr.clone(),
+        }       
     }
 
     pub fn eval(&self, recurse: bool) -> Option<Value> {
@@ -884,6 +955,10 @@ impl Unary {
 
     pub fn symbols(&self) -> HashSet<String> {
         self.expr.symbols()
+    }
+
+    pub fn has_symbol(&self, param: String) -> bool {
+        self.expr.has_symbol(param)
     }
 
     // Add with heuristic optimization
@@ -928,11 +1003,15 @@ impl Clone for Binary {
 }
 
 impl Binary {
+    pub fn new(op: BinaryOps, lhs: SymbolExpr, rhs: SymbolExpr) -> Self {
+        Self { op: op, lhs: lhs, rhs: rhs}
+    }
+
     pub fn to_string(&self) -> String {
         let s_lhs = self.lhs.to_string();
         let s_rhs = self.rhs.to_string();
         let op_lhs = match &self.lhs {
-            SymbolExpr::Binary(e) => match e.borrow().op {
+            SymbolExpr::Binary(e) => match e.op {
                 BinaryOps::Add | BinaryOps::Sub => true,
                 _ => false,
             },
@@ -943,7 +1022,7 @@ impl Binary {
             _ => false,
         };
         let op_rhs = match &self.rhs {
-            SymbolExpr::Binary(e) => match e.borrow().op {
+            SymbolExpr::Binary(e) => match e.op {
                 BinaryOps::Add | BinaryOps::Sub => true,
                 _ => false,
             },
@@ -956,7 +1035,7 @@ impl Binary {
 
         match self.op {
             BinaryOps::Add => match &self.rhs {
-                SymbolExpr::Unary(r) => match r.borrow().op {
+                SymbolExpr::Unary(r) => match r.op {
                     UnaryOps::Neg => if s_rhs.as_str().char_indices().nth(0).unwrap().1 == '-' {
                         String::from(format!("{}{}", s_lhs, s_rhs))
                     } else {
@@ -967,7 +1046,7 @@ impl Binary {
                 _ => String::from(format!("{}+{}", s_lhs, s_rhs))
             },
             BinaryOps::Sub =>  match &self.rhs {
-                SymbolExpr::Unary(r) => match r.borrow().op {
+                SymbolExpr::Unary(r) => match r.op {
                     UnaryOps::Neg => if s_rhs.as_str().char_indices().nth(0).unwrap().1 == '-' {
                         let st = s_rhs.char_indices().nth(0).unwrap().0;
                         let ed = s_rhs.char_indices().nth(1).unwrap().0;
@@ -1053,7 +1132,7 @@ impl Binary {
         }
     }
 
-    pub fn subs(&self, maps: &HashMap<String, f64>) -> SymbolExpr {
+    pub fn subs(&self, maps: &HashMap<String, SymbolExpr>) -> SymbolExpr {
         let new_expr = Binary{ op: self.op.clone(), lhs: self.lhs.subs(maps), rhs: self.rhs.subs(maps),};
         match new_expr.clone().eval(false) {
             Some(v) => SymbolExpr::Value(v),
@@ -1063,9 +1142,58 @@ impl Binary {
                 BinaryOps::Mul => new_expr.lhs * new_expr.rhs,
                 BinaryOps::Div => new_expr.lhs / new_expr.rhs,
                 BinaryOps::Pow => new_expr.lhs.pow(new_expr.rhs),
-                BinaryOps::Nop => new_expr.lhs + new_expr.rhs,
             }
         }
+    }
+
+    pub fn derivative(&self, param: &String) -> SymbolExpr {
+        match self.op {
+            BinaryOps::Add => self.lhs.derivative(param) + self.rhs.derivative(param),
+            BinaryOps::Sub => self.lhs.derivative(param) - self.rhs.derivative(param),
+            BinaryOps::Mul => self.lhs.derivative(param) * self.rhs.clone() + self.lhs.clone() * self.rhs.derivative(param),
+            BinaryOps::Div => (self.lhs.derivative(param) * self.rhs.clone() - self.lhs.clone() * self.rhs.derivative(param)) / self.rhs.clone() / self.rhs.clone(),
+            BinaryOps::Pow => {
+                if !self.lhs.has_symbol(param.clone()) {
+                    if !self.rhs.has_symbol(param.clone()) {
+                        SymbolExpr::Value( Value::Real(0.0))
+                    } else {
+                        let rhs = SymbolExpr::Unary( Arc::new( Unary{op: UnaryOps::Log, expr: self.lhs.clone()}));
+                        SymbolExpr::Binary( Arc::new( 
+                            Binary{
+                                op: BinaryOps::Mul,
+                                lhs: SymbolExpr::Binary( Arc::new(
+                                    Binary{
+                                        op: BinaryOps::Pow,
+                                        lhs: self.lhs.clone(),
+                                        rhs: self.rhs.clone(),
+                                    } )),
+                                rhs: rhs, }) )
+                    }
+                } else if !self.rhs.has_symbol(param.clone()) {
+                    let rhs = self.rhs.clone() - SymbolExpr::Value( Value::Real(1.0));
+                    self.rhs.clone() * SymbolExpr::Binary( Arc::new( Binary{op: BinaryOps::Pow, lhs: self.lhs.clone(), rhs: rhs}) )
+                } else {
+                    let new_expr = SymbolExpr::Unary( Arc::new( 
+                        Unary { 
+                            op: UnaryOps::Exp,
+                            expr: SymbolExpr::Binary( Arc::new(
+                                Binary{
+                                    op: BinaryOps::Mul,
+                                    lhs: SymbolExpr::Unary( Arc::new( 
+                                        Unary { 
+                                            op: UnaryOps::Log,
+                                            expr: self.lhs.clone(),
+                                        }
+                                    ) ),
+                                    rhs: self.rhs.clone(),
+                                },
+                            ) ),
+                        }
+                    ) );
+                    new_expr.derivative(param)
+                }
+            },
+        }       
     }
 
     pub fn eval(&self, recurse: bool) -> Option<Value> {
@@ -1097,7 +1225,6 @@ impl Binary {
             BinaryOps::Mul => Some(lval * rval),
             BinaryOps::Div => Some(lval / rval),
             BinaryOps::Pow => Some(lval.pow(rval)),
-            BinaryOps::Nop => None,
         }
     }
 
@@ -1109,32 +1236,36 @@ impl Binary {
         symbols
     }
 
+    pub fn has_symbol(&self, param: String) -> bool {
+        self.lhs.has_symbol(param.clone()) | self.rhs.has_symbol(param)
+    }
+
     // Add with heuristic optimization
     fn add_opt(&self, rhs: &SymbolExpr) -> Option<SymbolExpr> {
         if let BinaryOps::Add = &self.op {
             if let Some(e) = self.lhs.add_opt(rhs) {
                 return match e.add_opt(&self.rhs) {
                     Some(ee) => Some(ee),
-                    None => Some(SymbolExpr::Binary( Rc::new(RefCell::new( Binary{ op: BinaryOps::Add, lhs: e.clone(), rhs: self.rhs.clone()})) )),
+                    None => Some(SymbolExpr::Binary( Arc::new( Binary{ op: BinaryOps::Add, lhs: e.clone(), rhs: self.rhs.clone()})) ),
                 };
             }
             if let Some(e) = self.rhs.add_opt(rhs) {
                 return match self.lhs.add_opt(&e) {
                     Some(ee) => Some(ee),
-                    None => Some(SymbolExpr::Binary( Rc::new(RefCell::new( Binary{ op: BinaryOps::Add, lhs: self.lhs.clone(), rhs: e.clone()})) )),
+                    None => Some(SymbolExpr::Binary( Arc::new( Binary{ op: BinaryOps::Add, lhs: self.lhs.clone(), rhs: e.clone()})) ),
                 };
             }
         } else if let BinaryOps::Sub = &self.op {
             if let Some(e) = self.lhs.add_opt(rhs) {
                 return match e.add_opt(&self.rhs) {
                     Some(ee) => Some(ee),
-                    None => Some(SymbolExpr::Binary( Rc::new(RefCell::new( Binary{ op: BinaryOps::Sub, lhs: e.clone(), rhs: self.rhs.clone()})) )),
+                    None => Some(SymbolExpr::Binary( Arc::new( Binary{ op: BinaryOps::Sub, lhs: e.clone(), rhs: self.rhs.clone()})) ),
                 };
             }
             if let Some(e) = rhs.sub_opt(&self.rhs) {
                 return match self.lhs.add_opt(&e) {
                     Some(ee) => Some(ee),
-                    None => Some(SymbolExpr::Binary( Rc::new(RefCell::new( Binary{ op: BinaryOps::Add, lhs: self.lhs.clone(), rhs: e.clone()})) )),
+                    None => Some(SymbolExpr::Binary( Arc::new( Binary{ op: BinaryOps::Add, lhs: self.lhs.clone(), rhs: e.clone()})) ),
                 };
             }
         }
@@ -1144,11 +1275,11 @@ impl Binary {
                 BinaryOps::Add => Some(&(&self.lhs * &SymbolExpr::Value( Value::Real(2.0))) + &self.rhs),
                 BinaryOps::Sub => Some(&(&self.lhs * &SymbolExpr::Value( Value::Real(2.0))) - &self.rhs),
                 BinaryOps::Mul => match &self.rhs {
-                    SymbolExpr::Value(e) => Some(SymbolExpr::Binary( Rc::new(RefCell::new( Binary{ op: BinaryOps::Mul, lhs: SymbolExpr::Value(e.clone() + Value::Real(1.0)), rhs: self.lhs.clone()})) )),
+                    SymbolExpr::Value(e) => Some(SymbolExpr::Binary( Arc::new( Binary{ op: BinaryOps::Mul, lhs: SymbolExpr::Value(e.clone() + Value::Real(1.0)), rhs: self.lhs.clone()})) ),
                     _ => None,
                 },
                 BinaryOps::Div => match &self.rhs {
-                    SymbolExpr::Value(e) => Some(SymbolExpr::Binary( Rc::new(RefCell::new( Binary{ op: BinaryOps::Mul, lhs: self.lhs.clone(), rhs: SymbolExpr::Value((e.clone() + Value::Real(1.0))/e.clone())})) )),
+                    SymbolExpr::Value(e) => Some(SymbolExpr::Binary( Arc::new( Binary{ op: BinaryOps::Mul, lhs: self.lhs.clone(), rhs: SymbolExpr::Value((e.clone() + Value::Real(1.0))/e.clone())})) ),
                     _ => None,
                 },
                 _ => None,
@@ -1158,7 +1289,7 @@ impl Binary {
                 BinaryOps::Add => Some(&self.lhs + &(&self.rhs * &SymbolExpr::Value( Value::Real(2.0)))),
                 BinaryOps::Sub => Some(self.lhs.clone()),
                 BinaryOps::Mul => match &self.lhs {
-                    SymbolExpr::Value(e) => Some(SymbolExpr::Binary( Rc::new(RefCell::new( Binary{ op: BinaryOps::Mul, lhs: SymbolExpr::Value(e.clone() + Value::Real(1.0)), rhs: self.rhs.clone()})) )),
+                    SymbolExpr::Value(e) => Some(SymbolExpr::Binary( Arc::new( Binary{ op: BinaryOps::Mul, lhs: SymbolExpr::Value(e.clone() + Value::Real(1.0)), rhs: self.rhs.clone()})) ),
                     _ => None,
                 },
                 _ => None,
@@ -1166,30 +1297,30 @@ impl Binary {
         } else{
             match rhs {
                 SymbolExpr::Value(r) => match (&self.lhs, &self.rhs, &self.op) {
-                    (SymbolExpr::Value(l_l), _, BinaryOps::Add | BinaryOps::Sub) => Some(SymbolExpr::Binary( Rc::new(RefCell::new( Binary{ op: self.op.clone(), lhs: SymbolExpr::Value(l_l + r), rhs: self.rhs.clone()})) )),
-                    (_, SymbolExpr::Value(l_r), BinaryOps::Add) => Some(SymbolExpr::Binary( Rc::new(RefCell::new( Binary{ op: BinaryOps::Add, lhs: SymbolExpr::Value(l_r + r), rhs: self.lhs.clone()})) )),
-                    (_, SymbolExpr::Value(l_r), BinaryOps::Sub) => Some(SymbolExpr::Binary( Rc::new(RefCell::new( Binary{ op: BinaryOps::Add, lhs: SymbolExpr::Value(r - l_r), rhs: self.lhs.clone()})) )),
+                    (SymbolExpr::Value(l_l), _, BinaryOps::Add | BinaryOps::Sub) => Some(SymbolExpr::Binary( Arc::new( Binary{ op: self.op.clone(), lhs: SymbolExpr::Value(l_l + r), rhs: self.rhs.clone()})) ),
+                    (_, SymbolExpr::Value(l_r), BinaryOps::Add) => Some(SymbolExpr::Binary( Arc::new( Binary{ op: BinaryOps::Add, lhs: SymbolExpr::Value(l_r + r), rhs: self.lhs.clone()})) ),
+                    (_, SymbolExpr::Value(l_r), BinaryOps::Sub) => Some(SymbolExpr::Binary( Arc::new( Binary{ op: BinaryOps::Add, lhs: SymbolExpr::Value(r - l_r), rhs: self.lhs.clone()})) ),
                     (_, _, _) => None,
                 },
-                SymbolExpr::Binary(r) => if r.borrow().lhs == self.lhs {
-                    match (&self.op, &r.borrow().op) {
-                        (BinaryOps::Mul, BinaryOps::Mul) => Some(&self.lhs * &(&self.rhs + &r.borrow().rhs)),
+                SymbolExpr::Binary(r) => if r.lhs == self.lhs {
+                    match (&self.op, &r.op) {
+                        (BinaryOps::Mul, BinaryOps::Mul) => Some(&self.lhs * &(&self.rhs + &r.rhs)),
                         (_,_) => None,
                     }
-                } else if r.borrow().rhs == self.rhs {
-                    match (&self.op, &r.borrow().op) {
-                        (BinaryOps::Mul, BinaryOps::Mul) => Some(&(&self.lhs + &r.borrow().lhs) * &self.rhs),
-                        (BinaryOps::Div, BinaryOps::Div) => Some(&(&self.lhs + &r.borrow().lhs) / &self.rhs),
+                } else if r.rhs == self.rhs {
+                    match (&self.op, &r.op) {
+                        (BinaryOps::Mul, BinaryOps::Mul) => Some(&(&self.lhs + &r.lhs) * &self.rhs),
+                        (BinaryOps::Div, BinaryOps::Div) => Some(&(&self.lhs + &r.lhs) / &self.rhs),
                         (_,_) => None,
                     }
-                } else if r.borrow().rhs == self.lhs {
-                    match (&self.op, &r.borrow().op) {
-                        (BinaryOps::Mul, BinaryOps::Mul) => Some(&self.lhs * &(&r.borrow().lhs + &self.rhs)),
+                } else if r.rhs == self.lhs {
+                    match (&self.op, &r.op) {
+                        (BinaryOps::Mul, BinaryOps::Mul) => Some(&self.lhs * &(&r.lhs + &self.rhs)),
                         (_,_) => None,
                     }
-                } else if r.borrow().lhs == self.rhs {
-                    match (&self.op, &r.borrow().op) {
-                        (BinaryOps::Mul, BinaryOps::Mul) => Some(&self.rhs * &(&self.lhs + &r.borrow().rhs)),
+                } else if r.lhs == self.rhs {
+                    match (&self.op, &r.op) {
+                        (BinaryOps::Mul, BinaryOps::Mul) => Some(&self.rhs * &(&self.lhs + &r.rhs)),
                         (_,_) => None,
                     }
                 } else {
@@ -1206,26 +1337,26 @@ impl Binary {
             if let Some(e) = self.lhs.sub_opt(rhs) {
                 return match e.add_opt(&self.rhs) {
                     Some(ee) => Some(ee),
-                    None => Some(SymbolExpr::Binary( Rc::new(RefCell::new( Binary{ op: BinaryOps::Add, lhs: e.clone(), rhs: self.rhs.clone()})) )),
+                    None => Some(SymbolExpr::Binary( Arc::new( Binary{ op: BinaryOps::Add, lhs: e.clone(), rhs: self.rhs.clone()})) ),
                 };
             }
             if let Some(e) = self.rhs.sub_opt(rhs) {
                 return match self.lhs.add_opt(&e) {
                     Some(ee) => Some(ee),
-                    None => Some(SymbolExpr::Binary( Rc::new(RefCell::new( Binary{ op: BinaryOps::Add, lhs: self.lhs.clone(), rhs: e.clone()})) )),
+                    None => Some(SymbolExpr::Binary( Arc::new( Binary{ op: BinaryOps::Add, lhs: self.lhs.clone(), rhs: e.clone()})) ),
                 };
             }
         } else if let BinaryOps::Sub = &self.op {
             if let Some(e) = self.lhs.sub_opt(rhs) {
                 return match e.sub_opt(&self.rhs) {
                     Some(ee) => Some(ee),
-                    None => Some(SymbolExpr::Binary( Rc::new(RefCell::new( Binary{ op: BinaryOps::Sub, lhs: e.clone(), rhs: self.rhs.clone()})) )),
+                    None => Some(SymbolExpr::Binary( Arc::new( Binary{ op: BinaryOps::Sub, lhs: e.clone(), rhs: self.rhs.clone()})) ),
                 };
             }
             if let Some(e) = self.rhs.add_opt(rhs) {
                 return match self.lhs.sub_opt(&e) {
                     Some(ee) => Some(ee),
-                    None => Some(SymbolExpr::Binary( Rc::new(RefCell::new( Binary{ op: BinaryOps::Sub, lhs: self.lhs.clone(), rhs: e.clone()})) )),
+                    None => Some(SymbolExpr::Binary( Arc::new( Binary{ op: BinaryOps::Sub, lhs: self.lhs.clone(), rhs: e.clone()})) ),
                 };
             }
         }
@@ -1233,7 +1364,7 @@ impl Binary {
             if let Some(e) = self.rhs.sub_opt(rhs) {
                 return match self.lhs.sub_opt(&e) {
                     Some(ee) => Some(ee),
-                    None => Some(SymbolExpr::Binary( Rc::new(RefCell::new( Binary{ op: self.op.clone(), lhs: self.lhs.clone(), rhs: e.clone()})) )),
+                    None => Some(SymbolExpr::Binary( Arc::new( Binary{ op: self.op.clone(), lhs: self.lhs.clone(), rhs: e.clone()})) ),
                 };
             }
         }
@@ -1242,11 +1373,11 @@ impl Binary {
                 BinaryOps::Add => Some(self.rhs.clone()),
                 BinaryOps::Sub => Some(-&self.rhs),
                 BinaryOps::Mul => match &self.rhs {
-                    SymbolExpr::Value(e) => Some(SymbolExpr::Binary( Rc::new(RefCell::new( Binary{ op: BinaryOps::Mul, lhs: SymbolExpr::Value(e.clone() - Value::Real(1.0)), rhs: self.lhs.clone()})) )),
+                    SymbolExpr::Value(e) => Some(SymbolExpr::Binary( Arc::new( Binary{ op: BinaryOps::Mul, lhs: SymbolExpr::Value(e.clone() - Value::Real(1.0)), rhs: self.lhs.clone()})) ),
                     _ => None,
                 },
                 BinaryOps::Div => match &self.rhs {
-                    SymbolExpr::Value(e) => Some(SymbolExpr::Binary( Rc::new(RefCell::new( Binary{ op: BinaryOps::Mul, lhs: self.lhs.clone(), rhs: SymbolExpr::Value((Value::Real(1.0) - e.clone())/e.clone())})) )),
+                    SymbolExpr::Value(e) => Some(SymbolExpr::Binary( Arc::new( Binary{ op: BinaryOps::Mul, lhs: self.lhs.clone(), rhs: SymbolExpr::Value((Value::Real(1.0) - e.clone())/e.clone())})) ),
                     _ => None,
                 },
                 _ => None,
@@ -1256,7 +1387,7 @@ impl Binary {
                 BinaryOps::Add => Some(self.lhs.clone()),
                 BinaryOps::Sub => Some(&self.lhs - &(&self.rhs * &SymbolExpr::Value( Value::Real(2.0)))),
                 BinaryOps::Mul => match &self.lhs {
-                    SymbolExpr::Value(e) => Some(SymbolExpr::Binary( Rc::new(RefCell::new( Binary{ op: BinaryOps::Mul, lhs: SymbolExpr::Value(e.clone() - Value::Real(1.0)), rhs: self.rhs.clone()})) )),
+                    SymbolExpr::Value(e) => Some(SymbolExpr::Binary( Arc::new( Binary{ op: BinaryOps::Mul, lhs: SymbolExpr::Value(e.clone() - Value::Real(1.0)), rhs: self.rhs.clone()})) ),
                     _ => None,
                 },
                 _ => None,
@@ -1264,30 +1395,30 @@ impl Binary {
         } else{
             match rhs {
                 SymbolExpr::Value(r) => match (&self.lhs, &self.rhs, &self.op) {
-                    (SymbolExpr::Value(l_l), _, BinaryOps::Add | BinaryOps::Sub) => Some(SymbolExpr::Binary( Rc::new(RefCell::new( Binary{ op: self.op.clone(), lhs: SymbolExpr::Value(l_l - r), rhs: self.rhs.clone()})) )),
-                    (_, SymbolExpr::Value(l_r), BinaryOps::Add) => Some(SymbolExpr::Binary( Rc::new(RefCell::new( Binary{ op: BinaryOps::Sub, lhs: self.lhs.clone(), rhs: SymbolExpr::Value(l_r + r)})) )),
-                    (_, SymbolExpr::Value(l_r), BinaryOps::Sub) => Some(SymbolExpr::Binary( Rc::new(RefCell::new( Binary{ op: BinaryOps::Sub, lhs: self.lhs.clone(), rhs: SymbolExpr::Value(r - l_r)})) )),
+                    (SymbolExpr::Value(l_l), _, BinaryOps::Add | BinaryOps::Sub) => Some(SymbolExpr::Binary( Arc::new( Binary{ op: self.op.clone(), lhs: SymbolExpr::Value(l_l - r), rhs: self.rhs.clone()})) ),
+                    (_, SymbolExpr::Value(l_r), BinaryOps::Add) => Some(SymbolExpr::Binary( Arc::new( Binary{ op: BinaryOps::Sub, lhs: self.lhs.clone(), rhs: SymbolExpr::Value(l_r + r)})) ),
+                    (_, SymbolExpr::Value(l_r), BinaryOps::Sub) => Some(SymbolExpr::Binary( Arc::new( Binary{ op: BinaryOps::Sub, lhs: self.lhs.clone(), rhs: SymbolExpr::Value(r - l_r)})) ),
                     (_, _, _) => None,
                 },
-                SymbolExpr::Binary(r) => if r.borrow().lhs == self.lhs {
-                    match (&self.op, &r.borrow().op) {
-                        (BinaryOps::Mul, BinaryOps::Mul) => Some(&self.lhs * &(&self.rhs - &r.borrow().rhs)),
+                SymbolExpr::Binary(r) => if r.lhs == self.lhs {
+                    match (&self.op, &r.op) {
+                        (BinaryOps::Mul, BinaryOps::Mul) => Some(&self.lhs * &(&self.rhs - &r.rhs)),
                         (_,_) => None,
                     }
-                } else if r.borrow().rhs == self.rhs {
-                    match (&self.op, &r.borrow().op) {
-                        (BinaryOps::Mul, BinaryOps::Mul) => Some(&(&self.lhs - &r.borrow().lhs) * &self.rhs),
-                        (BinaryOps::Div, BinaryOps::Div) => Some(&(&self.lhs - &r.borrow().lhs) / &self.rhs),
+                } else if r.rhs == self.rhs {
+                    match (&self.op, &r.op) {
+                        (BinaryOps::Mul, BinaryOps::Mul) => Some(&(&self.lhs - &r.lhs) * &self.rhs),
+                        (BinaryOps::Div, BinaryOps::Div) => Some(&(&self.lhs - &r.lhs) / &self.rhs),
                         (_,_) => None,
                     }
-                } else if r.borrow().rhs == self.lhs {
-                    match (&self.op, &r.borrow().op) {
-                        (BinaryOps::Mul, BinaryOps::Mul) => Some(&self.lhs * &(&self.rhs - &r.borrow().lhs)),
+                } else if r.rhs == self.lhs {
+                    match (&self.op, &r.op) {
+                        (BinaryOps::Mul, BinaryOps::Mul) => Some(&self.lhs * &(&self.rhs - &r.lhs)),
                         (_,_) => None,
                     }
-                } else if r.borrow().lhs == self.rhs {
-                    match (&self.op, &r.borrow().op) {
-                        (BinaryOps::Mul, BinaryOps::Mul) => Some(&self.rhs * &(&self.lhs - &r.borrow().rhs)),
+                } else if r.lhs == self.rhs {
+                    match (&self.op, &r.op) {
+                        (BinaryOps::Mul, BinaryOps::Mul) => Some(&self.rhs * &(&self.lhs - &r.rhs)),
                         (_,_) => None,
                     }
                 } else {
@@ -1307,25 +1438,25 @@ impl Binary {
         }
         match rhs {
             SymbolExpr::Value(r) => match (&self.lhs, &self.rhs, &self.op) {
-                (SymbolExpr::Value(l_l), _, BinaryOps::Mul | BinaryOps::Div) => Some(SymbolExpr::Binary( Rc::new(RefCell::new( Binary{ op: self.op.clone(), lhs: SymbolExpr::Value(l_l * r), rhs: self.rhs.clone()})) )),
-                (_, SymbolExpr::Value(l_r), BinaryOps::Mul) => Some(SymbolExpr::Binary( Rc::new(RefCell::new( Binary{ op: BinaryOps::Mul, lhs: SymbolExpr::Value(l_r * r), rhs: self.lhs.clone()})) )),
-                (_, SymbolExpr::Value(l_r), BinaryOps::Div) => Some(SymbolExpr::Binary( Rc::new(RefCell::new( Binary{ op: BinaryOps::Mul, lhs: SymbolExpr::Value(r / l_r), rhs: self.lhs.clone()})) )),
+                (SymbolExpr::Value(l_l), _, BinaryOps::Mul | BinaryOps::Div) => Some(SymbolExpr::Binary( Arc::new( Binary{ op: self.op.clone(), lhs: SymbolExpr::Value(l_l * r), rhs: self.rhs.clone()})) ),
+                (_, SymbolExpr::Value(l_r), BinaryOps::Mul) => Some(SymbolExpr::Binary( Arc::new( Binary{ op: BinaryOps::Mul, lhs: SymbolExpr::Value(l_r * r), rhs: self.lhs.clone()})) ),
+                (_, SymbolExpr::Value(l_r), BinaryOps::Div) => Some(SymbolExpr::Binary( Arc::new( Binary{ op: BinaryOps::Mul, lhs: SymbolExpr::Value(r / l_r), rhs: self.lhs.clone()})) ),
                 (_, _, _) => None,
             },
-            SymbolExpr::Binary(r) => if r.borrow().rhs == self.lhs {
-                match (&self.op, &r.borrow().op) {
-                    (BinaryOps::Mul, BinaryOps::Div) => Some(&self.rhs * &r.borrow().lhs),
+            SymbolExpr::Binary(r) => if r.rhs == self.lhs {
+                match (&self.op, &r.op) {
+                    (BinaryOps::Mul, BinaryOps::Div) => Some(&self.rhs * &r.lhs),
                     (_,_) => None,
                 }
-            } else if r.borrow().lhs == self.rhs {
-                match (&self.op, &r.borrow().op) {
+            } else if r.lhs == self.rhs {
+                match (&self.op, &r.op) {
                     (BinaryOps::Div, BinaryOps::Mul) =>  Some(&self.lhs * &self.rhs),
                     (_,_) => None,
                 }
-            } else if r.borrow().rhs == self.rhs {
-                match (&self.op, &r.borrow().op) {
-                    (BinaryOps::Mul, BinaryOps::Div) => Some(&self.lhs * &r.borrow().lhs),
-                    (BinaryOps::Div, BinaryOps::Mul) => Some(&self.lhs * &r.borrow().lhs),
+            } else if r.rhs == self.rhs {
+                match (&self.op, &r.op) {
+                    (BinaryOps::Mul, BinaryOps::Div) => Some(&self.lhs * &r.lhs),
+                    (BinaryOps::Div, BinaryOps::Mul) => Some(&self.lhs * &r.lhs),
                     (_,_) => None,
                 }
             } else {
@@ -1341,7 +1472,7 @@ impl Binary {
             if let BinaryOps::Mul = self.op {
                 return Some(self.rhs.clone());
             } else if let BinaryOps::Div = self.op {
-                return Some(SymbolExpr::Binary( Rc::new(RefCell::new( Binary{ op: BinaryOps::Div, lhs: SymbolExpr::Value( Value::Real(1.0)), rhs: self.rhs.clone()})) ));
+                return Some(SymbolExpr::Binary( Arc::new( Binary{ op: BinaryOps::Div, lhs: SymbolExpr::Value( Value::Real(1.0)), rhs: self.rhs.clone()})) );
             }
         } else if self.rhs == *rhs {
             if let BinaryOps::Mul = self.op {
@@ -1351,27 +1482,27 @@ impl Binary {
 
         match rhs {
             SymbolExpr::Value(r) => match (&self.lhs, &self.rhs, &self.op) {
-                (SymbolExpr::Value(l_l), _, BinaryOps::Mul | BinaryOps::Div) => Some(SymbolExpr::Binary( Rc::new(RefCell::new( Binary{ op: self.op.clone(), lhs: SymbolExpr::Value(l_l / r), rhs: self.rhs.clone()})) )),
-                (_, SymbolExpr::Value(l_r), BinaryOps::Mul) => Some(SymbolExpr::Binary( Rc::new(RefCell::new( Binary{ op: BinaryOps::Div, lhs: self.lhs.clone(), rhs: SymbolExpr::Value(l_r / r)})) )),
-                (_, SymbolExpr::Value(l_r), BinaryOps::Div) => Some(SymbolExpr::Binary( Rc::new(RefCell::new( Binary{ op: BinaryOps::Mul, lhs: self.lhs.clone(), rhs: SymbolExpr::Value(r * l_r)})) )),
+                (SymbolExpr::Value(l_l), _, BinaryOps::Mul | BinaryOps::Div) => Some(SymbolExpr::Binary( Arc::new( Binary{ op: self.op.clone(), lhs: SymbolExpr::Value(l_l / r), rhs: self.rhs.clone()})) ),
+                (_, SymbolExpr::Value(l_r), BinaryOps::Mul) => Some(SymbolExpr::Binary( Arc::new( Binary{ op: BinaryOps::Div, lhs: self.lhs.clone(), rhs: SymbolExpr::Value(l_r / r)})) ),
+                (_, SymbolExpr::Value(l_r), BinaryOps::Div) => Some(SymbolExpr::Binary( Arc::new( Binary{ op: BinaryOps::Mul, lhs: self.lhs.clone(), rhs: SymbolExpr::Value(r * l_r)})) ),
                 (_, _, _) => None,
             },
-            SymbolExpr::Binary(r) => if r.borrow().lhs == self.lhs {
-                match (&self.op, &r.borrow().op) {
-                    (BinaryOps::Mul, BinaryOps::Mul) => Some(&self.rhs / &r.borrow().rhs),
-                    (BinaryOps::Mul, BinaryOps::Div) => Some(&self.rhs * &r.borrow().rhs),
+            SymbolExpr::Binary(r) => if r.lhs == self.lhs {
+                match (&self.op, &r.op) {
+                    (BinaryOps::Mul, BinaryOps::Mul) => Some(&self.rhs / &r.rhs),
+                    (BinaryOps::Mul, BinaryOps::Div) => Some(&self.rhs * &r.rhs),
                     (_,_) => None,
                 }
-            } else if r.borrow().lhs == self.rhs {
-                match (&self.op, &r.borrow().op) {
-                    (BinaryOps::Mul, BinaryOps::Mul) => Some(&self.lhs / &r.borrow().rhs),
-                    (BinaryOps::Mul, BinaryOps::Div) => Some(&self.lhs * &r.borrow().rhs),
+            } else if r.lhs == self.rhs {
+                match (&self.op, &r.op) {
+                    (BinaryOps::Mul, BinaryOps::Mul) => Some(&self.lhs / &r.rhs),
+                    (BinaryOps::Mul, BinaryOps::Div) => Some(&self.lhs * &r.rhs),
                     (_,_) => None,
                 }
-            } else if r.borrow().rhs == self.rhs {
-                match (&self.op, &r.borrow().op) {
-                    (BinaryOps::Mul, BinaryOps::Mul) => Some(&self.lhs / &r.borrow().lhs),
-                    (BinaryOps::Div, BinaryOps::Div) => Some(&self.lhs / &r.borrow().lhs),
+            } else if r.rhs == self.rhs {
+                match (&self.op, &r.op) {
+                    (BinaryOps::Mul, BinaryOps::Mul) => Some(&self.lhs / &r.lhs),
+                    (BinaryOps::Div, BinaryOps::Div) => Some(&self.lhs / &r.lhs),
                     (_,_) => None,
                 }
             } else {
