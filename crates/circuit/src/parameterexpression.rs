@@ -14,7 +14,7 @@
 
 use std::convert::From;
 use std::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Sub, SubAssign, Neg};
-use std::collections::HashMap;
+use hashbrown::HashMap;
 
 use crate::symbol_expr::{SymbolExpr, Value};
 use crate::symbol_parser::parse_expression;
@@ -61,9 +61,7 @@ impl ParameterExpression {
     }
 
     pub fn bind(&mut self, map: &HashMap<String, f64>) -> ParameterExpression {
-        let subs_map : HashMap::<String, SymbolExpr> = 
-        map.iter().map(|(key, val)| (key.clone(), SymbolExpr::Value(Value::Real(*val)))).collect();
-        ParameterExpression{expr_: self.expr_.subs(&subs_map)}
+        ParameterExpression{expr_: self.expr_.bind(&map)}
     }
 
     pub fn subs(&self, map: &HashMap<String, ParameterExpression>) -> ParameterExpression {
@@ -72,13 +70,13 @@ impl ParameterExpression {
         ParameterExpression{expr_: self.expr_.subs(&subs_map)}
     }
 
-    pub fn real(&self) -> f64 {
+    pub fn real(&self) -> Option<f64> {
         self.expr_.real()
     }
-    pub fn imag(&self) -> f64 {
+    pub fn imag(&self) -> Option<f64> {
         self.expr_.imag()
     }
-    pub fn complex(&self) -> Complex64 {
+    pub fn complex(&self) -> Option<Complex64> {
         self.expr_.complex()
     }
 
@@ -184,7 +182,8 @@ impl ParameterExpression {
     }
 
     pub fn pow<T: Into<Self>>(self, prm: T) -> Self {
-        Self {expr_: self.expr_.pow(prm.into().expr_),}
+        let t : ParameterExpression = prm.into();
+        Self {expr_: self.expr_.pow(&t.expr_),}
     }
 }
 

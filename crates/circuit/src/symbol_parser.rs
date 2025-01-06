@@ -11,9 +11,10 @@
 // that they have been altered from the originals.
 
 extern crate nom;
+extern crate nom_unicode;
 use nom::IResult;
 use nom::Parser;
-use nom::character::complete::{char, multispace0, alpha1, alphanumeric1};
+use nom::character::complete::{char, multispace0};
 use nom::bytes::complete::tag;
 use nom::combinator::{all_consuming, map_res, recognize};
 use nom::branch::{alt, permutation};
@@ -39,8 +40,7 @@ impl BinaryOpContainer {
             BinaryOps::Sub => BinaryOpContainer{op: rhs.op, expr: self.expr - rhs.expr,}, 
             BinaryOps::Mul => BinaryOpContainer{op: rhs.op, expr: self.expr * rhs.expr,}, 
             BinaryOps::Div => BinaryOpContainer{op: rhs.op, expr: self.expr / rhs.expr,}, 
-            BinaryOps::Pow => BinaryOpContainer{op: rhs.op, expr: self.expr.pow(rhs.expr),}, 
-            _ => self.clone(),
+            BinaryOps::Pow => BinaryOpContainer{op: rhs.op, expr: self.expr.pow(&rhs.expr),}, 
         }
     }
 }
@@ -66,6 +66,13 @@ fn parse_imaginary_value(s: &str) -> IResult<&str, BinaryOpContainer> {
     )(s)
 }
 
+fn alpha1(i: &str) -> IResult<&str, &str> {
+    nom_unicode::complete::alpha1(i)
+}
+
+fn alphanumeric1(i: &str) -> IResult<&str, &str> {
+    nom_unicode::complete::alphanumeric1(i)
+}
 
 fn parse_symbol_string(s: &str) -> IResult<&str, &str> {
     recognize(
