@@ -658,7 +658,7 @@ class ParameterExpression:
             )
         if self._symbol_expr.is_complex:
             return self._symbol_expr.complex()
-        return self._symbol_expr.real()
+        return self._symbol_expr.float()
 
     def sympify(self):
         """Return symbolic expression as a raw Sympy or Symengine object.
