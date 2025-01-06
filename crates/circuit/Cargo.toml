@@ -20,8 +20,8 @@ numpy.workspace = true
 thiserror.workspace = true
 approx.workspace = true
 itertools.workspace = true
-nom = "7"
-nom-unicode = "0.3"
+nom.workspace = true
+nom-unicode.workspace = true
 
 
 [dependencies.pyo3]
