@@ -14,9 +14,9 @@ extern crate nom;
 extern crate nom_unicode;
 use nom::IResult;
 use nom::Parser;
-use nom::character::complete::{char, multispace0};
+use nom::character::complete::{char, multispace0, digit1};
 use nom::bytes::complete::tag;
-use nom::combinator::{all_consuming, map_res, recognize};
+use nom::combinator::{all_consuming, map_res, recognize, opt};
 use nom::branch::{alt, permutation};
 use nom::sequence::{delimited, pair, tuple};
 use nom::multi::{many0, many0_count};
@@ -85,9 +85,27 @@ fn parse_symbol_string(s: &str) -> IResult<&str, &str> {
 
 fn parse_symbol(s: &str) -> IResult<&str, BinaryOpContainer> {
     map_res(
-        parse_symbol_string,
-        |v: &str| -> Result<BinaryOpContainer, &str> {
-            Ok(BinaryOpContainer{op: BinaryOps::Add, expr: SymbolExpr::Symbol( Symbol::new(v))})
+        tuple((
+            parse_symbol_string,
+            opt(
+                delimited(
+                    char('['),
+                    digit1,
+                    char(']'),
+                ),
+            ),
+        )),
+        |(v, array_idx)| -> Result<BinaryOpContainer, &str> {
+            match array_idx {
+                Some(i) => {
+                    // currently array index is stored as string
+                    // if array indexing is required in the future
+                    // add indexing in Symbol struct
+                    let s = format!("{}[{}]",v,i);
+                    return Ok(BinaryOpContainer{op: BinaryOps::Add, expr: SymbolExpr::Symbol( Symbol::new(&s))});
+                },
+                None => Ok(BinaryOpContainer{op: BinaryOps::Add, expr: SymbolExpr::Symbol( Symbol::new(v))}),
+            }
         }
     )(s)
 }

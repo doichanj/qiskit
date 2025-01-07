@@ -11,7 +11,7 @@
 // that they have been altered from the originals.
 
 
-use crate::symbol_expr::{SymbolExpr, Value};
+use crate::symbol_expr::{SymbolExpr, Value, Symbol};
 use crate::symbol_parser::parse_expression;
 
 use num_complex::Complex64;
@@ -65,10 +65,27 @@ impl PySymbolExpr {
     #[staticmethod]
     pub fn Symbol(name: String) -> Self {
         PySymbolExpr {
-            expr : parse_expression(&name),
+            expr : SymbolExpr::Symbol(Symbol::new(&name)),
         }
     }
 
+    #[staticmethod]
+    pub fn Value(value: ParameterValue) -> Self {
+        match value {
+            ParameterValue::Real(r) => PySymbolExpr { expr: SymbolExpr::Value( Value::Real(r.clone()))},
+            ParameterValue::Complex(c) => PySymbolExpr { expr: SymbolExpr::Value( Value::Complex(c.clone()))},
+            ParameterValue::Int(r) => PySymbolExpr { expr: SymbolExpr::Value( Value::Real(r.clone().into()))},
+            ParameterValue::Str(s) => PySymbolExpr { expr: parse_expression(&s)},
+            ParameterValue::Expr(e) => PySymbolExpr { expr: e.expr},
+        }
+    }
+
+    #[staticmethod]
+    pub fn Expression(name: String) -> Self {
+        PySymbolExpr {
+            expr : parse_expression(&name),
+        }
+    }
 
     pub fn sin(&self) -> Self {
         Self {
