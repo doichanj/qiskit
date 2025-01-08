@@ -60,7 +60,7 @@ impl ParameterExpression {
         self.expr_.symbols().contains(&symbol)
     }
 
-    pub fn bind(&mut self, map: &HashMap<String, f64>) -> ParameterExpression {
+    pub fn bind(&mut self, map: &HashMap<String, Value>) -> ParameterExpression {
         ParameterExpression{expr_: self.expr_.bind(&map)}
     }
 

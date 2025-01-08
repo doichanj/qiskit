@@ -33,16 +33,25 @@ pub struct PySymbolExpr {
 // enum for argument for operators
 #[derive(FromPyObject, Clone, Debug)]
 pub enum ParameterValue {
-    #[pyo3(transparent, annotation = "float")]
-    Real(f64),
     #[pyo3(transparent, annotation = "complex")]
     Complex(Complex64),
+    #[pyo3(transparent, annotation = "float")]
+    Real(f64),
     #[pyo3(transparent, annotation = "int")]
     Int(i32),
     #[pyo3(transparent, annotation = "str")]
     Str(String),
     Expr(PySymbolExpr),
 }
+
+#[derive(FromPyObject, Clone, Debug)]
+pub enum BindValue {
+    #[pyo3(transparent, annotation = "complex")]
+    Complex(Complex64),
+    #[pyo3(transparent, annotation = "float")]
+    Real(f64),
+}
+
 
 
 #[pymethods]
@@ -72,9 +81,9 @@ impl PySymbolExpr {
     #[staticmethod]
     pub fn Value(value: ParameterValue) -> Self {
         match value {
-            ParameterValue::Real(r) => PySymbolExpr { expr: SymbolExpr::Value( Value::Real(r.clone()))},
-            ParameterValue::Complex(c) => PySymbolExpr { expr: SymbolExpr::Value( Value::Complex(c.clone()))},
-            ParameterValue::Int(r) => PySymbolExpr { expr: SymbolExpr::Value( Value::Real(r.clone().into()))},
+            ParameterValue::Real(r) => PySymbolExpr { expr: SymbolExpr::Value( Value::from(r.clone()))},
+            ParameterValue::Complex(c) => PySymbolExpr { expr: SymbolExpr::Value( Value::from(c.clone()))},
+            ParameterValue::Int(r) => PySymbolExpr { expr: SymbolExpr::Value( Value::from(r.clone()))},
             ParameterValue::Str(s) => PySymbolExpr { expr: parse_expression(&s)},
             ParameterValue::Expr(e) => PySymbolExpr { expr: e.expr},
         }
@@ -182,7 +191,17 @@ impl PySymbolExpr {
         self.expr.to_string()
     }
 
-    pub fn bind(&self, maps: HashMap<String, f64>) -> Self {
+    pub fn bind(&self, in_maps: HashMap<String, BindValue>) -> Self {
+        let maps : HashMap::<String, Value> = 
+            in_maps
+                .iter()
+                .map(|(key, val)| (
+                    key.clone(),
+                    match val {
+                        BindValue::Complex(c) => Value::from(c.clone()),
+                        BindValue::Real(r) => Value::from(r.clone()),
+                    },
+                )).collect();
         Self {
             expr: self.expr.bind(&maps),
         }
@@ -200,18 +219,18 @@ impl PySymbolExpr {
     // ====================================
     pub fn __eq__(&self, rhs: ParameterValue) -> bool {
         match rhs {
-            ParameterValue::Real(r) => self.expr == SymbolExpr::Value( Value::Real(r.clone())),
-            ParameterValue::Complex(c) => self.expr == SymbolExpr::Value( Value::Complex(c.clone())),
-            ParameterValue::Int(r) => self.expr == SymbolExpr::Value( Value::Real(r.clone().into())),
+            ParameterValue::Real(r) => self.expr == SymbolExpr::Value( Value::from(r.clone())),
+            ParameterValue::Complex(c) => self.expr == SymbolExpr::Value( Value::from(c.clone())),
+            ParameterValue::Int(r) => self.expr == SymbolExpr::Value( Value::from(r.clone())),
             ParameterValue::Str(s) => self.expr == parse_expression(&s),
             ParameterValue::Expr(e) => self.expr == e.expr,
         }
     }
     pub fn __ne__(&self, rhs: ParameterValue) -> bool {
         match rhs {
-            ParameterValue::Real(r) => self.expr != SymbolExpr::Value( Value::Real(r.clone())),
-            ParameterValue::Complex(c) => self.expr != SymbolExpr::Value( Value::Complex(c.clone())),
-            ParameterValue::Int(r) => self.expr != SymbolExpr::Value( Value::Real(r.clone().into())),
+            ParameterValue::Real(r) => self.expr != SymbolExpr::Value( Value::from(r.clone())),
+            ParameterValue::Complex(c) => self.expr != SymbolExpr::Value( Value::from(c.clone())),
+            ParameterValue::Int(r) => self.expr != SymbolExpr::Value( Value::from(r.clone())),
             ParameterValue::Str(s) => self.expr != parse_expression(&s),
             ParameterValue::Expr(e) => self.expr != e.expr,
         }
@@ -223,90 +242,90 @@ impl PySymbolExpr {
     }
     pub fn __add__(&self, rhs: ParameterValue) -> Self {
         match rhs {
-            ParameterValue::Real(r) => Self {expr: &self.expr + &SymbolExpr::Value( Value::Real(r.clone()))},
-            ParameterValue::Complex(c) => Self {expr: &self.expr + &SymbolExpr::Value( Value::Complex(c.clone()))},
-            ParameterValue::Int(r) => Self {expr: &self.expr + &SymbolExpr::Value( Value::Real(r.clone().into()))},
+            ParameterValue::Real(r) => Self {expr: &self.expr + &SymbolExpr::Value( Value::from(r.clone()))},
+            ParameterValue::Complex(c) => Self {expr: &self.expr + &SymbolExpr::Value( Value::from(c.clone()))},
+            ParameterValue::Int(r) => Self {expr: &self.expr + &SymbolExpr::Value( Value::from(r.clone()))},
             ParameterValue::Str(s) => Self {expr: &self.expr + &parse_expression(&s)},
             ParameterValue::Expr(e) => Self {expr: &self.expr + &e.expr},
         }
     }
     pub fn __radd__(&self, rhs: ParameterValue) -> Self {
         match rhs {
-            ParameterValue::Real(r) => Self {expr: &SymbolExpr::Value( Value::Real(r.clone())) + &self.expr},
-            ParameterValue::Complex(c) => Self {expr: &SymbolExpr::Value( Value::Complex(c.clone())) + &self.expr},
-            ParameterValue::Int(r) => Self {expr: &SymbolExpr::Value( Value::Real(r.clone().into())) + &self.expr},
+            ParameterValue::Real(r) => Self {expr: &SymbolExpr::Value( Value::from(r.clone())) + &self.expr},
+            ParameterValue::Complex(c) => Self {expr: &SymbolExpr::Value( Value::from(c.clone())) + &self.expr},
+            ParameterValue::Int(r) => Self {expr: &SymbolExpr::Value( Value::from(r.clone())) + &self.expr},
             ParameterValue::Str(s) => Self {expr: &parse_expression(&s) + &self.expr},
             ParameterValue::Expr(e) => Self {expr: &e.expr + &self.expr},
         }
     }
     pub fn __sub__(&self, rhs: ParameterValue) -> Self {
         match rhs {
-            ParameterValue::Real(r) => Self {expr: &self.expr - &SymbolExpr::Value( Value::Real(r.clone()))},
-            ParameterValue::Complex(c) => Self {expr: &self.expr - &SymbolExpr::Value( Value::Complex(c.clone()))},
-            ParameterValue::Int(r) => Self {expr: &self.expr - &SymbolExpr::Value( Value::Real(r.clone().into()))},
+            ParameterValue::Real(r) => Self {expr: &self.expr - &SymbolExpr::Value( Value::from(r.clone()))},
+            ParameterValue::Complex(c) => Self {expr: &self.expr - &SymbolExpr::Value( Value::from(c.clone()))},
+            ParameterValue::Int(r) => Self {expr: &self.expr - &SymbolExpr::Value( Value::from(r.clone()))},
             ParameterValue::Str(s) => Self {expr: &self.expr - &parse_expression(&s)},
             ParameterValue::Expr(e) => Self {expr: &self.expr - &e.expr},
         }
     }
     pub fn __rsub__(&self, rhs: ParameterValue) -> Self {
         match rhs {
-            ParameterValue::Real(r) => Self {expr: &SymbolExpr::Value( Value::Real(r.clone())) - &self.expr},
-            ParameterValue::Complex(c) => Self {expr: &SymbolExpr::Value( Value::Complex(c.clone())) - &self.expr},
-            ParameterValue::Int(r) => Self {expr: &SymbolExpr::Value( Value::Real(r.clone().into())) - &self.expr},
+            ParameterValue::Real(r) => Self {expr: &SymbolExpr::Value( Value::from(r.clone())) - &self.expr},
+            ParameterValue::Complex(c) => Self {expr: &SymbolExpr::Value( Value::from(c.clone())) - &self.expr},
+            ParameterValue::Int(r) => Self {expr: &SymbolExpr::Value( Value::from(r.clone())) - &self.expr},
             ParameterValue::Str(s) => Self {expr: &parse_expression(&s) - &self.expr},
             ParameterValue::Expr(e) => Self {expr: &e.expr - &self.expr},
         }
     }
     pub fn __mul__(&self, rhs: ParameterValue) -> Self {
         match rhs {
-            ParameterValue::Real(r) => Self {expr: &self.expr * &SymbolExpr::Value( Value::Real(r.clone()))},
-            ParameterValue::Complex(c) => Self {expr: &self.expr * &SymbolExpr::Value( Value::Complex(c.clone()))},
-            ParameterValue::Int(r) => Self {expr: &self.expr * &SymbolExpr::Value( Value::Real(r.clone().into()))},
+            ParameterValue::Real(r) => Self {expr: &self.expr * &SymbolExpr::Value( Value::from(r.clone()))},
+            ParameterValue::Complex(c) => Self {expr: &self.expr * &SymbolExpr::Value( Value::from(c.clone()))},
+            ParameterValue::Int(r) => Self {expr: &self.expr * &SymbolExpr::Value( Value::from(r.clone()))},
             ParameterValue::Str(s) => Self {expr: &self.expr * &parse_expression(&s)},
             ParameterValue::Expr(e) => Self {expr: &self.expr * &e.expr},
         }
     }
     pub fn __rmul__(&self, rhs: ParameterValue) -> Self {
         match rhs {
-            ParameterValue::Real(r) => Self {expr: &SymbolExpr::Value( Value::Real(r.clone())) * &self.expr},
-            ParameterValue::Complex(c) => Self {expr: &SymbolExpr::Value( Value::Complex(c.clone())) * &self.expr},
-            ParameterValue::Int(r) => Self {expr: &SymbolExpr::Value( Value::Real(r.clone().into())) * &self.expr},
+            ParameterValue::Real(r) => Self {expr: &SymbolExpr::Value( Value::from(r.clone())) * &self.expr},
+            ParameterValue::Complex(c) => Self {expr: &SymbolExpr::Value( Value::from(c.clone())) * &self.expr},
+            ParameterValue::Int(r) => Self {expr: &SymbolExpr::Value( Value::from(r.clone())) * &self.expr},
             ParameterValue::Str(s) => Self {expr: &parse_expression(&s) * &self.expr},
             ParameterValue::Expr(e) => Self {expr: &e.expr * &self.expr},
         }
     }
     pub fn __truediv__(&self, rhs: ParameterValue) -> Self {
         match rhs {
-            ParameterValue::Real(r) => Self {expr: &self.expr / &SymbolExpr::Value( Value::Real(r.clone()))},
-            ParameterValue::Complex(c) => Self {expr: &self.expr / &SymbolExpr::Value( Value::Complex(c.clone()))},
-            ParameterValue::Int(r) => Self {expr: &self.expr / &SymbolExpr::Value( Value::Real(r.clone().into()))},
+            ParameterValue::Real(r) => Self {expr: &self.expr / &SymbolExpr::Value( Value::from(r.clone()))},
+            ParameterValue::Complex(c) => Self {expr: &self.expr / &SymbolExpr::Value( Value::from(c.clone()))},
+            ParameterValue::Int(r) => Self {expr: &self.expr / &SymbolExpr::Value( Value::from(r.clone()))},
             ParameterValue::Str(s) => Self {expr: &self.expr / &parse_expression(&s)},
             ParameterValue::Expr(e) => Self {expr: &self.expr / &e.expr},
         }
     }
     pub fn __rtruediv__(&self, rhs: ParameterValue) -> Self {
         match rhs {
-            ParameterValue::Real(r) => Self {expr: &SymbolExpr::Value( Value::Real(r.clone())) / &self.expr},
-            ParameterValue::Complex(c) => Self {expr: &SymbolExpr::Value( Value::Complex(c.clone())) / &self.expr},
-            ParameterValue::Int(r) => Self {expr: &SymbolExpr::Value( Value::Real(r.clone().into())) / &self.expr},
+            ParameterValue::Real(r) => Self {expr: &SymbolExpr::Value( Value::from(r.clone())) / &self.expr},
+            ParameterValue::Complex(c) => Self {expr: &SymbolExpr::Value( Value::from(c.clone())) / &self.expr},
+            ParameterValue::Int(r) => Self {expr: &SymbolExpr::Value( Value::from(r.clone())) / &self.expr},
             ParameterValue::Str(s) => Self {expr: &parse_expression(&s) / &self.expr},
             ParameterValue::Expr(e) => Self {expr: &e.expr / &self.expr},
         }
     }
     pub fn __pow__(&self, rhs: ParameterValue, _modulo: Option<i32>) -> Self {
         match rhs {
-            ParameterValue::Real(r) => Self {expr: self.expr.pow(&SymbolExpr::Value( Value::Real(r.clone())))},
-            ParameterValue::Complex(c) => Self {expr: self.expr.pow(&SymbolExpr::Value( Value::Complex(c.clone())))},
-            ParameterValue::Int(r) => Self {expr: self.expr.pow(&SymbolExpr::Value( Value::Real(r.clone().into())))},
+            ParameterValue::Real(r) => Self {expr: self.expr.pow(&SymbolExpr::Value( Value::from(r.clone())))},
+            ParameterValue::Complex(c) => Self {expr: self.expr.pow(&SymbolExpr::Value( Value::from(c.clone())))},
+            ParameterValue::Int(r) => Self {expr: self.expr.pow(&SymbolExpr::Value( Value::from(r.clone())))},
             ParameterValue::Str(s) => Self {expr: self.expr.pow(&parse_expression(&s))},
             ParameterValue::Expr(e) => Self {expr: self.expr.pow(&e.expr)},
         }
     }
     pub fn __rpow__(&self, rhs: ParameterValue, _modulo: Option<i32>) -> Self {
         match rhs {
-            ParameterValue::Real(r) => Self {expr: SymbolExpr::Value( Value::Real(r.clone())).pow(&self.expr)},
-            ParameterValue::Complex(c) => Self {expr: SymbolExpr::Value( Value::Complex(c.clone())).pow(&self.expr)},
-            ParameterValue::Int(r) => Self {expr: SymbolExpr::Value( Value::Real(r.clone().into())).pow(&self.expr)},
+            ParameterValue::Real(r) => Self {expr: SymbolExpr::Value( Value::from(r.clone())).pow(&self.expr)},
+            ParameterValue::Complex(c) => Self {expr: SymbolExpr::Value( Value::from(c.clone())).pow(&self.expr)},
+            ParameterValue::Int(r) => Self {expr: SymbolExpr::Value( Value::from(r.clone())).pow(&self.expr)},
             ParameterValue::Str(s) => Self {expr: parse_expression(&s).pow(&self.expr)},
             ParameterValue::Expr(e) => Self {expr: e.expr.pow(&self.expr)},
         }

@@ -609,7 +609,7 @@ class ParameterExpression:
 
             return self._symbol_expr == other._symbol_expr
         elif isinstance(other, numbers.Number):
-            return len(self.parameters) == 0 and self._symbol_expr.complex() == other
+            return self._symbol_expr == other
         return False
 
     def is_real(self):
