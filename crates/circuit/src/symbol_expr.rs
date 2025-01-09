@@ -116,16 +116,15 @@ impl SymbolExpr {
         }
     }
 
-    pub fn derivative(&self, param: &String) -> SymbolExpr {
-        match self {
-            SymbolExpr::Symbol(e) => if e.name == *param {
-                SymbolExpr::Value( Value::Real(1.0))
-            } else {
-                SymbolExpr::Value( Value::Real(0.0))
-            },
-            SymbolExpr::Value(_) => SymbolExpr::Value( Value::Real(0.0)),
-            SymbolExpr::Unary(e) => e.derivative(param),
-            SymbolExpr::Binary(e) => e.derivative(param),
+    pub fn derivative(&self, param: &SymbolExpr) -> SymbolExpr {
+        if self == param {
+            SymbolExpr::Value( Value::Real(1.0))
+        } else {
+            match self {
+                SymbolExpr::Value(_) | SymbolExpr::Symbol(_) => SymbolExpr::Value( Value::Real(0.0)),
+                SymbolExpr::Unary(e) => e.derivative(param),
+                SymbolExpr::Binary(e) => e.derivative(param),
+            }
         }
     }
 
@@ -435,30 +434,22 @@ impl Sub for &SymbolExpr {
         } else if *self == *rhs {
             SymbolExpr::Value(Value::Real(0.0))
         } else {
-            match self {
-                SymbolExpr::Value(l) => match rhs {
-                    SymbolExpr::Value(r) => SymbolExpr::Value(l - r),
-                    SymbolExpr::Binary(r) => match r.sub_opt(self) {
-                        Some(e) => -e,
-                        None => SymbolExpr::Binary( Arc::new(Binary{ op: BinaryOps::Sub, lhs: SymbolExpr::Value(l.clone()), rhs: rhs.clone()}) ),
-                    },
-                    _ => SymbolExpr::Binary( Arc::new(Binary{ op: BinaryOps::Sub, lhs: SymbolExpr::Value(l.clone()), rhs: rhs.clone()}) ),
+            match rhs {
+                SymbolExpr::Value(r) => self + &SymbolExpr::Value(-r),
+                SymbolExpr::Unary(r) => match r.op {
+                    UnaryOps::Neg => self + &r.expr,
+                    _ => SymbolExpr::Binary( Arc::new(Binary{ op: BinaryOps::Sub, lhs: self.clone(), rhs: rhs.clone()}) ), 
                 },
-                SymbolExpr::Symbol(_) => match rhs {
-                    SymbolExpr::Binary(r) => match r.sub_opt(self) {
+                _ => match self {
+                    SymbolExpr::Value(_) | SymbolExpr::Symbol(_) => match rhs.sub_opt(self) {
                         Some(e) => -e,
                         None => SymbolExpr::Binary( Arc::new(Binary{ op: BinaryOps::Sub, lhs: self.clone(), rhs: rhs.clone()}) ),
                     },
-                    _ => SymbolExpr::Binary( Arc::new(Binary{ op: BinaryOps::Sub, lhs: self.clone(), rhs: rhs.clone()}) ),
-                },
-                SymbolExpr::Unary(l) => match l.op {
-                    UnaryOps::Neg => -&(rhs + &l.expr),
-                    _=> SymbolExpr::Binary( Arc::new(Binary{ op: BinaryOps::Sub, lhs: self.clone(), rhs: rhs.clone()}) ),
-                },
-                SymbolExpr::Binary(l) => match l.sub_opt(rhs) {
-                    Some(e) => e,
-                    None => SymbolExpr::Binary( Arc::new(Binary{ op: BinaryOps::Sub, lhs: self.clone(), rhs: rhs.clone()}) ),
-                }
+                    SymbolExpr::Unary(_) | SymbolExpr::Binary(_) => match self.sub_opt(rhs) {
+                        Some(e) => e,
+                        None => SymbolExpr::Binary( Arc::new(Binary{ op: BinaryOps::Sub, lhs: self.clone(), rhs: rhs.clone()}) ),
+                    },
+                } ,
             }
         }
     }
@@ -663,7 +654,17 @@ impl Value {
     pub fn to_string(&self) -> String {
         match self {
             Value::Real(e) => e.to_string(),
-            Value::Complex(e) => e.to_string(),
+            Value::Complex(e) => if e.re == 0.0 {
+                if e.im == 0.0 {
+                    0.to_string()
+                } else {
+                    String::from(format!("{}i", e.im))
+                }
+            } else if e.im == 0.0 {
+                e.re.to_string()
+            } else {
+                e.to_string()
+            },
         }
     }
     pub fn as_real(&self) -> f64 {
@@ -941,7 +942,7 @@ impl Unary {
         }
     }
 
-    pub fn derivative(&self, param: &String) -> SymbolExpr {
+    pub fn derivative(&self, param: &SymbolExpr) -> SymbolExpr {
         let expr_d = self.expr.derivative(param);
         match self.op {
             UnaryOps::Abs => self.expr.clone() * expr_d / SymbolExpr::Unary( Arc::new( Unary {op: self.op.clone(), expr: self.expr.clone()})),
@@ -1223,15 +1224,15 @@ impl Binary {
         }
     }
 
-    pub fn derivative(&self, param: &String) -> SymbolExpr {
+    pub fn derivative(&self, param: &SymbolExpr) -> SymbolExpr {
         match self.op {
             BinaryOps::Add => self.lhs.derivative(param) + self.rhs.derivative(param),
             BinaryOps::Sub => self.lhs.derivative(param) - self.rhs.derivative(param),
             BinaryOps::Mul => self.lhs.derivative(param) * self.rhs.clone() + self.lhs.clone() * self.rhs.derivative(param),
             BinaryOps::Div => (self.lhs.derivative(param) * self.rhs.clone() - self.lhs.clone() * self.rhs.derivative(param)) / self.rhs.clone() / self.rhs.clone(),
             BinaryOps::Pow => {
-                if !self.lhs.has_symbol(param) {
-                    if !self.rhs.has_symbol(param) {
+                if !self.lhs.has_symbol(&param.to_string()) {
+                    if !self.rhs.has_symbol(&param.to_string()) {
                         SymbolExpr::Value( Value::Real(0.0))
                     } else {
                         let rhs = SymbolExpr::Unary( Arc::new( Unary{op: UnaryOps::Log, expr: self.lhs.clone()}));
@@ -1246,7 +1247,7 @@ impl Binary {
                                     } )),
                                 rhs: rhs, }) )
                     }
-                } else if !self.rhs.has_symbol(param) {
+                } else if !self.rhs.has_symbol(&param.to_string()) {
                     let rhs = self.rhs.clone() - SymbolExpr::Value( Value::Real(1.0));
                     self.rhs.clone() * SymbolExpr::Binary( Arc::new( Binary{op: BinaryOps::Pow, lhs: self.lhs.clone(), rhs: rhs}) )
                 } else {

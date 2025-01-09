@@ -427,17 +427,17 @@ class ParameterExpression:
         # when deriving linear expression)
         parameter_symbols = {}
         for parameter, symbol in self._parameter_symbols.items():
-            if symbol in expr_grad.free_symbols:
+            if symbol.name in expr_grad.symbols:
                 parameter_symbols[parameter] = symbol
         # If the gradient corresponds to a parameter expression then return the new expression.
         if len(parameter_symbols) > 0:
             return ParameterExpression(parameter_symbols, expr=expr_grad, _qpy_replay=qpy_replay)
         # If no free symbols left, return a complex or float gradient
-        expr_grad_cplx = complex(expr_grad)
+        expr_grad_cplx = expr_grad.complex()
         if expr_grad_cplx.imag != 0:
             return expr_grad_cplx
         else:
-            return float(expr_grad)
+            return float(expr_grad_cplx.real)
 
     def __add__(self, other):
         return self._apply_operation(operator.add, other, op_code=_OPCode.ADD)

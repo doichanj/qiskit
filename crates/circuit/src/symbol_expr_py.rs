@@ -145,17 +145,23 @@ impl PySymbolExpr {
         self.expr.sign()
     }
     pub fn complex(&self) -> PyResult<Complex64> {
-        match self.expr.complex() {
-            Some(c) => Ok(c),
+        match self.expr.eval(true) {
+            Some(v) => match v {
+                Value::Real(r) => Ok(Complex64::from(r)),
+                Value::Complex(c) => Ok(c),
+            },
             None=> Err(pyo3::exceptions::PyRuntimeError::new_err("Expression has some undefined symbols.")),
         }
     }
     pub fn float(&self) -> PyResult<f64> {
-        match self.expr.real() {
-            Some(r) => Ok(r),
+        match self.expr.eval(true) {
+            Some(v) => match v {
+                Value::Real(r) => Ok(r),
+                Value::Complex(c) => Ok(c.re),
+            },
             None=> Err(pyo3::exceptions::PyRuntimeError::new_err("Expression has some undefined symbols.")),
         }
-   }
+    }
     pub fn copy(&self) -> Self {
         Self {
             expr: self.expr.clone(),
@@ -166,9 +172,9 @@ impl PySymbolExpr {
             expr: self.expr.conjugate(),
         }
     }
-    pub fn derivative(&self, param: String) -> Self {
+    pub fn derivative(&self, param: Self) -> Self {
         Self {
-            expr: self.expr.derivative(&param),
+            expr: self.expr.derivative(&param.expr),
         }
     }
 
