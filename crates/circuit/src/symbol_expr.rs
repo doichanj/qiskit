@@ -473,6 +473,10 @@ impl Mul for &SymbolExpr {
             rhs.clone()
         } else if *rhs == SymbolExpr::Value( Value::Real(1.0)) {
             self.clone()
+        } else if *self == SymbolExpr::Value( Value::Real(-1.0)) {
+            rhs.neg()
+        } else if *rhs == SymbolExpr::Value( Value::Real(-1.0)) {
+            self.neg()
         } else {
             match self {
                 SymbolExpr::Value(l) => match rhs {
@@ -498,6 +502,13 @@ impl Mul for &SymbolExpr {
                 },
                 SymbolExpr::Unary(l) => match l.op {
                     UnaryOps::Neg => -(rhs * &l.expr),
+                    UnaryOps::Abs => match rhs {
+                        SymbolExpr::Unary(r) => match r.op {
+                            UnaryOps::Abs => SymbolExpr::Unary( Arc::new( Unary{ op: UnaryOps::Abs, expr: &l.expr * &r.expr}) ),
+                            _=> SymbolExpr::Binary( Arc::new( Binary{ op: BinaryOps::Mul, lhs: self.clone(), rhs: rhs.clone()}) ),
+                        },
+                        _ => SymbolExpr::Binary( Arc::new( Binary{ op: BinaryOps::Mul, lhs: self.clone(), rhs: rhs.clone()}) ),
+                    }
                     _=> SymbolExpr::Binary( Arc::new( Binary{ op: BinaryOps::Mul, lhs: self.clone(), rhs: rhs.clone()}) ),
                 },
                 SymbolExpr::Binary(l) => match l.mul_opt(rhs) {
@@ -523,8 +534,6 @@ impl Div for &SymbolExpr {
             SymbolExpr::Value( Value::Real(0.0))
         } else if *rhs == SymbolExpr::Value( Value::Real(1.0)) {
             self.clone()
-        } else if *self == SymbolExpr::Value( Value::Real(-1.0)) {
-            rhs.neg()
         } else if *rhs == SymbolExpr::Value( Value::Real(-1.0)) {
             self.neg()
         } else if *self == *rhs {
@@ -549,6 +558,13 @@ impl Div for &SymbolExpr {
                 },
                 SymbolExpr::Unary(l) => match l.op {
                     UnaryOps::Neg => -(&l.expr / rhs),
+                    UnaryOps::Abs => match rhs {
+                        SymbolExpr::Unary(r) => match r.op {
+                            UnaryOps::Abs => SymbolExpr::Unary( Arc::new( Unary{ op: UnaryOps::Abs, expr: &l.expr / &r.expr}) ),
+                            _=> SymbolExpr::Binary( Arc::new( Binary{ op: BinaryOps::Div, lhs: self.clone(), rhs: rhs.clone()}) ),
+                        },
+                        _ => SymbolExpr::Binary( Arc::new( Binary{ op: BinaryOps::Div, lhs: self.clone(), rhs: rhs.clone()}) ),
+                    }
                     _=> SymbolExpr::Binary( Arc::new( Binary{ op: BinaryOps::Div, lhs: self.clone(), rhs: rhs.clone()}) ),
                 },
                 SymbolExpr::Binary(l) => match l.div_opt(rhs) {
@@ -737,8 +753,12 @@ impl Value {
     pub fn pow(self, p: Value) -> Value {
         match self {
             Value::Real(e) => match p {
-                Value::Real(r) => Value::Real(e.powf(r)),
-                Value::Complex(_) => Value::Complex(e.into()).pow(p),
+                Value::Real(r) => if e < 0.0 {
+                    Value::Complex(Complex64::from(e).powf(r))
+                } else {
+                    Value::Real(e.powf(r))
+                },
+                Value::Complex(r) => Value::Complex(Complex64::from(e).powc(r)),
             },
             Value::Complex(e) => match p {
                 Value::Real(r) => Value::Complex(e.powf(r)),
