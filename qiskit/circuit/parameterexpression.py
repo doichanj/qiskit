@@ -532,7 +532,7 @@ class ParameterExpression:
 
     def __complex__(self):
         try:
-            return self._symbol_expr.complex()
+            return complex(self._symbol_expr)
         # TypeError is for sympy, RuntimeError for symengine
         except (TypeError, RuntimeError) as exc:
             if self.parameters:
@@ -544,7 +544,7 @@ class ParameterExpression:
 
     def __float__(self):
         try:
-            return self._symbol_expr.float()
+            return float(self._symbol_expr)
         # TypeError is for sympy, RuntimeError for symengine
         except (TypeError, RuntimeError) as exc:
             if self.parameters:
@@ -655,9 +655,11 @@ class ParameterExpression:
         if self._parameter_symbols:
             raise TypeError(
                 f"Expression with unbound parameters '{self.parameters}' is not numeric"
-            )
+            )      
         if self._symbol_expr.is_complex:
             return self._symbol_expr.complex()
+        if self._symbol_expr.is_int:
+            return self._symbol_expr.int()
         return self._symbol_expr.float()
 
     def sympify(self):

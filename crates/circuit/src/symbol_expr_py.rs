@@ -162,6 +162,16 @@ impl PySymbolExpr {
             None=> Err(pyo3::exceptions::PyRuntimeError::new_err("Expression has some undefined symbols.")),
         }
     }
+    pub fn int(&self) -> PyResult<i32> {
+        match self.expr.eval(true) {
+            Some(v) => match v {
+                Value::Real(r) => Ok(r as i32),
+                Value::Complex(c) => Ok(c.re as i32),
+            },
+            None=> Err(pyo3::exceptions::PyRuntimeError::new_err("Expression has some undefined symbols.")),
+        }
+    }
+
     pub fn copy(&self) -> Self {
         Self {
             expr: self.expr.clone(),
@@ -185,6 +195,10 @@ impl PySymbolExpr {
     #[getter]
     pub fn is_complex(&self) -> bool {
         self.expr.is_complex()
+    }
+    #[getter]
+    pub fn is_int(&self) -> bool {
+        self.expr.is_int()
     }
 
     #[getter]
@@ -338,6 +352,16 @@ impl PySymbolExpr {
     }
     pub fn __str__(&self) -> String {
         self.expr.to_string()
+    }
+
+    pub fn __float__(&self) -> PyResult<f64> {
+        self.float()
+    }
+    pub fn __complex__(&self) -> PyResult<Complex64> {
+        self.complex()
+    }
+    pub fn __int__(&self) -> PyResult<i32> {
+        self.int()
     }
 
     pub fn __hash__(&self) -> u64 {

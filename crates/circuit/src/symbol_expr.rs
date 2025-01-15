@@ -247,6 +247,17 @@ impl SymbolExpr {
             SymbolExpr::Binary(e) => e.lhs.is_real() && e.rhs.is_real(),
         }
     }
+    pub fn is_int(&self) -> bool {
+        match self {
+            SymbolExpr::Symbol(_) => false,
+            SymbolExpr::Value(e) => match e {
+                Value::Real(r) => r - r.floor() == 0.0,
+                _ => false,
+            },
+            SymbolExpr::Unary(e) => e.expr.is_int(),
+            SymbolExpr::Binary(e) => e.lhs.is_int() && e.rhs.is_int(),
+        }
+    }
 
     pub fn abs(&self) -> SymbolExpr {
         match self {
@@ -1034,17 +1045,25 @@ impl Unary {
                 _ => return None,
             }         
         }
-        match self.op {
-            UnaryOps::Abs => Some(val.abs()),
-            UnaryOps::Neg => Some(-val),
-            UnaryOps::Sin => Some(val.sin()),
-            UnaryOps::Asin => Some(val.asin()),
-            UnaryOps::Cos => Some(val.cos()),
-            UnaryOps::Acos => Some(val.acos()),
-            UnaryOps::Tan => Some(val.tan()),
-            UnaryOps::Atan => Some(val.atan()),
-            UnaryOps::Exp => Some(val.exp()),
-            UnaryOps::Log => Some(val.log()),
+        let ret = match self.op {
+            UnaryOps::Abs => val.abs(),
+            UnaryOps::Neg => -val,
+            UnaryOps::Sin => val.sin(),
+            UnaryOps::Asin => val.asin(),
+            UnaryOps::Cos => val.cos(),
+            UnaryOps::Acos => val.acos(),
+            UnaryOps::Tan => val.tan(),
+            UnaryOps::Atan => val.atan(),
+            UnaryOps::Exp => val.exp(),
+            UnaryOps::Log => val.log(),
+        };
+        match ret {
+            Value::Real(_) => Some(ret),
+            Value::Complex(c) => if c.im == 0.0 {
+                Some(Value::Real(c.re))
+            } else {
+                Some(ret)
+            }
         }
     }
 
@@ -1370,12 +1389,20 @@ impl Binary {
                 _ => return None,
             }
         }
-        match self.op {
-            BinaryOps::Add => Some(lval + rval),
-            BinaryOps::Sub => Some(lval - rval),
-            BinaryOps::Mul => Some(lval * rval),
-            BinaryOps::Div => Some(lval / rval),
-            BinaryOps::Pow => Some(lval.pow(rval)),
+        let ret = match self.op {
+            BinaryOps::Add => lval + rval,
+            BinaryOps::Sub => lval - rval,
+            BinaryOps::Mul => lval * rval,
+            BinaryOps::Div => lval / rval,
+            BinaryOps::Pow => lval.pow(rval),
+        };
+        match ret {
+            Value::Real(_) => Some(ret),
+            Value::Complex(c) => if c.im == 0.0 {
+                Some(Value::Real(c.re))
+            } else {
+                Some(ret)
+            }
         }
     }
 
