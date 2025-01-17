@@ -813,9 +813,9 @@ impl From<f64> for Value {
     }
 }
 
-impl From<i32> for Value {
-    fn from(v: i32) -> Self {
-        Value::Real(v.into())
+impl From<i64> for Value {
+    fn from(v: i64) -> Self {
+        Value::Real(v as f64)
     }
 }
 
@@ -947,17 +947,17 @@ impl PartialEq for Value {
                 Value::Real(rv) => (e - rv).abs() < f64::EPSILON,
                 Value::Complex(rv) => {
                     let t = Complex64::from(*e) - rv;
-                    return (t.re*t.re + t.im*t.im) < f64::EPSILON;
+                    return t.re < f64::EPSILON && t.re > -f64::EPSILON && t.im < f64::EPSILON && t.im > -f64::EPSILON;
                 },
             },
             Value::Complex(e) => match r {
                 Value::Real(rv) => {
                     let t = *e - Complex64::from(rv);
-                    return (t.re*t.re + t.im*t.im) < f64::EPSILON;
+                    return t.re < f64::EPSILON && t.re > -f64::EPSILON && t.im < f64::EPSILON && t.im > -f64::EPSILON;
                 },
                 Value::Complex(rv) =>{
                     let t = *e - rv;
-                    return (t.re*t.re + t.im*t.im) < f64::EPSILON;
+                    return t.re < f64::EPSILON && t.re > -f64::EPSILON && t.im < f64::EPSILON && t.im > -f64::EPSILON;
                 },
             },
         }
@@ -970,7 +970,7 @@ impl PartialEq<f64> for Value {
             Value::Real(e) => (e - r).abs() < f64::EPSILON,
             Value::Complex(e) => {
                 let t = *e - Complex64::from(r);
-                return (t.re*t.re + t.im*t.im) < f64::EPSILON;
+                return t.re < f64::EPSILON && t.re > -f64::EPSILON && t.im < f64::EPSILON && t.im > -f64::EPSILON;
             },
         }
     }
@@ -981,11 +981,11 @@ impl PartialEq<Complex64> for Value {
         match self {
             Value::Real(e) => {
                 let t = Complex64::from(*e) - r;
-                return (t.re*t.re + t.im*t.im) < f64::EPSILON;
+                return t.re < f64::EPSILON && t.re > -f64::EPSILON && t.im < f64::EPSILON && t.im > -f64::EPSILON;
             },
             Value::Complex(e) => {
                 let t = *e - r;
-                return (t.re*t.re + t.im*t.im) < f64::EPSILON;
+                return t.re < f64::EPSILON && t.re > -f64::EPSILON && t.im < f64::EPSILON && t.im > -f64::EPSILON;
             },
         }
     }
@@ -1545,7 +1545,7 @@ impl Binary {
                     (_, SymbolExpr::Value(l_r), BinaryOps::Sub) => Some(SymbolExpr::Binary( Arc::new( Binary{ op: BinaryOps::Add, lhs: SymbolExpr::Value(r - l_r), rhs: self.lhs.clone()})) ),
                     (_, _, _) => None,
                 },
-                SymbolExpr::Binary(r) => if r.lhs == self.lhs {
+/*                SymbolExpr::Binary(r) => if r.lhs == self.lhs {
                     match (&self.op, &r.op) {
                         (BinaryOps::Mul, BinaryOps::Mul) => Some(&self.lhs * &(&self.rhs + &r.rhs)),
                         (_,_) => None,
@@ -1568,7 +1568,7 @@ impl Binary {
                     }
                 } else {
                     None
-                },
+                },*/
                 _ => None,
             }
         }
@@ -1643,7 +1643,7 @@ impl Binary {
                     (_, SymbolExpr::Value(l_r), BinaryOps::Sub) => Some(SymbolExpr::Binary( Arc::new( Binary{ op: BinaryOps::Sub, lhs: self.lhs.clone(), rhs: SymbolExpr::Value(r - l_r)})) ),
                     (_, _, _) => None,
                 },
-                SymbolExpr::Binary(r) => if r.lhs == self.lhs {
+/*                SymbolExpr::Binary(r) => if r.lhs == self.lhs {
                     match (&self.op, &r.op) {
                         (BinaryOps::Mul, BinaryOps::Mul) => Some(&self.lhs * &(&self.rhs - &r.rhs)),
                         (_,_) => None,
@@ -1666,7 +1666,7 @@ impl Binary {
                     }
                 } else {
                     None
-                },
+                },*/
                 _ => None,
             }
         }

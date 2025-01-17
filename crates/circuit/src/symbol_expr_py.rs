@@ -38,7 +38,7 @@ pub enum ParameterValue {
     #[pyo3(transparent, annotation = "float")]
     Real(f64),
     #[pyo3(transparent, annotation = "int")]
-    Int(i32),
+    Int(i64),
     #[pyo3(transparent, annotation = "str")]
     Str(String),
     Expr(PySymbolExpr),
@@ -162,11 +162,11 @@ impl PySymbolExpr {
             None=> Err(pyo3::exceptions::PyRuntimeError::new_err("Expression has some undefined symbols.")),
         }
     }
-    pub fn int(&self) -> PyResult<i32> {
+    pub fn int(&self) -> PyResult<i64> {
         match self.expr.eval(true) {
             Some(v) => match v {
-                Value::Real(r) => Ok(r as i32),
-                Value::Complex(c) => Ok(c.re as i32),
+                Value::Real(r) => Ok(r as i64),
+                Value::Complex(c) => Ok(c.re as i64),
             },
             None=> Err(pyo3::exceptions::PyRuntimeError::new_err("Expression has some undefined symbols.")),
         }
@@ -360,7 +360,7 @@ impl PySymbolExpr {
     pub fn __complex__(&self) -> PyResult<Complex64> {
         self.complex()
     }
-    pub fn __int__(&self) -> PyResult<i32> {
+    pub fn __int__(&self) -> PyResult<i64> {
         self.int()
     }
 
