@@ -1242,28 +1242,28 @@ impl Binary {
             },
             BinaryOps::Mul => if op_lhs {
                 if op_rhs {
-                    String::from(format!("({}) * ({})", s_lhs, s_rhs))
+                    String::from(format!("({})*({})", s_lhs, s_rhs))
                 } else {
-                    String::from(format!("({}) * {}", s_lhs, s_rhs))
+                    String::from(format!("({})*{}", s_lhs, s_rhs))
                 }
             } else {
                 if op_rhs {
-                    String::from(format!("{} * ({})", s_lhs, s_rhs))
+                    String::from(format!("{}*({})", s_lhs, s_rhs))
                 } else {
-                    String::from(format!("{} * {}", s_lhs, s_rhs))
+                    String::from(format!("{}*{}", s_lhs, s_rhs))
                 }
             },
             BinaryOps::Div => if op_lhs {
                 if op_rhs {
-                    String::from(format!("({}) / ({})", s_lhs, s_rhs))
+                    String::from(format!("({})/({})", s_lhs, s_rhs))
                 } else {
-                    String::from(format!("({}) / {}", s_lhs, s_rhs))
+                    String::from(format!("({})/{}", s_lhs, s_rhs))
                 }
             } else {
                 if op_rhs {
-                    String::from(format!("{} / ({})", s_lhs, s_rhs))
+                    String::from(format!("{}/({})", s_lhs, s_rhs))
                 } else {
-                    String::from(format!("{} / {}", s_lhs, s_rhs))
+                    String::from(format!("{}/{}", s_lhs, s_rhs))
                 }
             },
             BinaryOps::Pow => match &self.lhs {
@@ -1742,8 +1742,8 @@ impl Binary {
         match rhs {
             SymbolExpr::Value(r) => match (&self.lhs, &self.rhs, &self.op) {
                 (SymbolExpr::Value(l_l), _, BinaryOps::Mul | BinaryOps::Div) => Some(SymbolExpr::Binary( Arc::new( Binary{ op: self.op.clone(), lhs: SymbolExpr::Value(l_l / r), rhs: self.rhs.clone()})) ),
-                (_, SymbolExpr::Value(l_r), BinaryOps::Mul) => Some(SymbolExpr::Binary( Arc::new( Binary{ op: BinaryOps::Div, lhs: self.lhs.clone(), rhs: SymbolExpr::Value(l_r / r)})) ),
-                (_, SymbolExpr::Value(l_r), BinaryOps::Div) => Some(SymbolExpr::Binary( Arc::new( Binary{ op: BinaryOps::Mul, lhs: self.lhs.clone(), rhs: SymbolExpr::Value(r * l_r)})) ),
+                (_, SymbolExpr::Value(l_r), BinaryOps::Mul) => Some(SymbolExpr::Binary( Arc::new( Binary{ op: BinaryOps::Mul, lhs: self.lhs.clone(), rhs: SymbolExpr::Value(l_r / r)})) ),
+                (_, SymbolExpr::Value(l_r), BinaryOps::Div) => Some(SymbolExpr::Binary( Arc::new( Binary{ op: BinaryOps::Mul, lhs: self.lhs.clone(), rhs: SymbolExpr::Value(Value::Real(1.0) / (r * l_r))})) ),
                 (_, _, _) => None,
             },
             SymbolExpr::Binary(r) => if r.rhs == self.lhs {

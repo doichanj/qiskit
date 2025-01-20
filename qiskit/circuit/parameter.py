@@ -17,7 +17,6 @@ from __future__ import annotations
 
 from uuid import uuid4, UUID
 
-# import symengine
 import qiskit._accelerate.circuit
 SymbolExpr = qiskit._accelerate.circuit.PySymbolExpr
 

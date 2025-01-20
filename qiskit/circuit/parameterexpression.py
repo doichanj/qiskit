@@ -23,7 +23,6 @@ import numbers
 import operator
 
 import numpy
-# import symengine
 import qiskit._accelerate.circuit
 SymbolExpr = qiskit._accelerate.circuit.PySymbolExpr
 
@@ -124,15 +123,22 @@ class ParameterExpression:
             symbol_map (Dict[Parameter, [ParameterExpression, float, or int]]):
                 Mapping of :class:`Parameter` instances to the :class:`sympy.Symbol`
                 serving as their placeholder in expr.
-            expr (sympy.Expr): Expression of :class:`sympy.Symbol` s.
+            expr (SymbolExpr or str): Expression with Rust's SymbolExprPy or string 
         """
         # NOTE: `Parameter.__init__` does not call up to this method, since this method is dependent
         # on `Parameter` instances already being initialized enough to be hashable.  If changing
         # this method, check that `Parameter.__init__` and `__setstate__` are still valid.
         self._parameter_symbols = symbol_map
         self._parameter_keys = frozenset(p._hash_key() for p in self._parameter_symbols)
-        self._symbol_expr = expr
-        self._name_map: dict | None = None
+        if isinstance(expr, SymbolExpr):
+            self._symbol_expr = expr
+            self._name_map: dict | None = None
+        else:
+            self._symbol_expr = SymbolExpr(expr)
+            # reconstruct symbols from input parameters
+            for param in symbol_map.keys():
+                self._name_map[param] = SymbolExpr.Symbol(param.name)
+
         self._standalone_param = False
         if _qpy_replay is not None:
             self._qpy_replay = _qpy_replay
