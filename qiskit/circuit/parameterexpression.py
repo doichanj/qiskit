@@ -128,16 +128,17 @@ class ParameterExpression:
         # NOTE: `Parameter.__init__` does not call up to this method, since this method is dependent
         # on `Parameter` instances already being initialized enough to be hashable.  If changing
         # this method, check that `Parameter.__init__` and `__setstate__` are still valid.
-        self._parameter_symbols = symbol_map
-        self._parameter_keys = frozenset(p._hash_key() for p in self._parameter_symbols)
         if isinstance(expr, SymbolExpr):
+            self._parameter_symbols = symbol_map
             self._symbol_expr = expr
-            self._name_map: dict | None = None
         else:
             self._symbol_expr = SymbolExpr(expr)
+            self._parameter_symbols = {}
             # reconstruct symbols from input parameters
             for param in symbol_map.keys():
-                self._name_map[param] = SymbolExpr.Symbol(param.name)
+                self._parameter_symbols[param] = SymbolExpr.Symbol(param.name)
+        self._name_map: dict | None = None
+        self._parameter_keys = frozenset(p._hash_key() for p in self._parameter_symbols)
 
         self._standalone_param = False
         if _qpy_replay is not None:
