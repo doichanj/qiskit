@@ -211,7 +211,7 @@ impl PySymbolExpr {
         self.expr.to_string()
     }
 
-    pub fn bind(&self, in_maps: HashMap<String, BindValue>) -> Self {
+    pub fn bind(&self, in_maps: HashMap<String, BindValue>) -> PyResult<Self> {
         let maps : HashMap::<String, Value> = 
             in_maps
                 .iter()
@@ -222,8 +222,21 @@ impl PySymbolExpr {
                         BindValue::Real(r) => Value::from(r.clone()),
                     },
                 )).collect();
-        Self {
-            expr: self.expr.bind(&maps),
+        let bound = self.expr.bind(&maps);
+        match bound {
+            SymbolExpr::Value(ref v) => match v {
+                Value::Real(r) => if *r == f64::INFINITY {
+                    Err(pyo3::exceptions::PyZeroDivisionError::new_err("zero division occurs while binding parameter"))
+                } else {
+                    Ok(Self {expr: bound})
+                },
+                Value::Complex(c) => if c.re == f64::INFINITY || c.im == f64::INFINITY {
+                    Err(pyo3::exceptions::PyZeroDivisionError::new_err("zero division occurs while binding parameter"))
+                } else {
+                    Ok(Self {expr: bound})
+                },
+            },
+            _ => Ok(Self {expr: bound}),
         }
     }
     pub fn subs(&self, in_maps: HashMap<String, Self>) -> Self {
@@ -369,6 +382,15 @@ impl PySymbolExpr {
         self.expr.to_string().hash(&mut hasher);
         hasher.finish()
     }
+
+    // for pickle, we can reproduce equation from expression string
+    fn __getstate__(&self) -> String {
+        self.expr.to_string()
+    }
+    fn __setstate__(&mut self, state: String) {
+        self.expr = parse_expression(&state);
+    }
+
 }
 
 #[pyfunction]
