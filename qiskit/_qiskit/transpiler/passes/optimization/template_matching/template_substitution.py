@@ -497,14 +497,8 @@ class TemplateSubstitution:
         import sympy as sym
         from sympy.parsing.sympy_parser import parse_expr
 
-        if _optionals.HAS_SYMENGINE:
-            import symengine
-
-            # Converts Sympy expressions to Symengine ones.
-            to_native_symbolic = symengine.sympify
-        else:
-            # Our native form is sympy, so we don't need to do anything.
-            to_native_symbolic = lambda x: x
+        # Our native form is sympy, so we don't need to do anything.
+        to_native_symbolic = lambda x: x
 
         circuit_params, template_params = [], []
         # Set of all parameter names that are present in the circuits to be optimized.
@@ -569,17 +563,17 @@ class TemplateSubstitution:
         for circuit_param, template_param in zip(circuit_params, template_params):
             if isinstance(template_param, ParameterExpression):
                 if isinstance(circuit_param, ParameterExpression):
-                    circ_param_sym = sym.sympify(str(circuit_param))
+                    circ_param_sym = circuit_param.sympify()
                 else:
                     circ_param_sym = parse_expr(str(circuit_param))
-                equations.append(sym.Eq(sym.sympify(str(template_param)), circ_param_sym))
+                equations.append(sym.Eq(template_param.sympify(), circ_param_sym))
 
                 for param in template_param.parameters:
-                    temp_symbols[param] = sym.sympify(str(param))
+                    temp_symbols[param] = param.sympify()
 
                 if isinstance(circuit_param, ParameterExpression):
                     for param in circuit_param.parameters:
-                        circ_dict[param] = sym.sympify(str(param))
+                        circ_dict[param] = param.sympify()
             elif template_param != circuit_param:
                 # Both are numeric parameters, but aren't equal.
                 return None

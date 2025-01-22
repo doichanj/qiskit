@@ -83,10 +83,23 @@ fn parse_symbol_string(s: &str) -> IResult<&str, &str> {
     ).parse(s)
 }
 
+fn parse_special_char(s: &str) -> IResult<&str, &str> {
+    recognize(
+        tuple((
+            tag("$\\"),
+            alpha1,
+            tag("$"),
+        )),
+    ).parse(s)
+}
+
 fn parse_symbol(s: &str) -> IResult<&str, BinaryOpContainer> {
     map_res(
         tuple((
-            parse_symbol_string,
+            alt((
+                parse_special_char,
+                parse_symbol_string,
+            )),
             opt(
                 delimited(
                     char('['),
@@ -130,6 +143,7 @@ fn parse_unary(s: &str) -> IResult<&str, BinaryOpContainer> {
                 "atan" => UnaryOps::Atan,
                 "log" => UnaryOps::Log,
                 "exp" => UnaryOps::Exp,
+                "sign" => UnaryOps::Sign,
                 &_ => return Err("unsupported unary operation found."),
             };
             Ok(BinaryOpContainer{op: BinaryOps::Add, expr: SymbolExpr::Unary( Arc::new(Unary::new(op,expr.expr)))})

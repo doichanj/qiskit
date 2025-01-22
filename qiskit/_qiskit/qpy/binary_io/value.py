@@ -164,7 +164,7 @@ def _write_parameter_expression(file_obj, obj, use_symengine, *, version):
     if version < 13:
         from sympy import srepr, sympify
 
-        expr_bytes = srepr(obj.sympify()).encode(common.ENCODE)
+        expr_bytes = srepr(sympify(str(obj._symbol_expr))).encode(common.ENCODE)
     else:
         with io.BytesIO() as buf:
             extra_symbols = _write_parameter_expression_v13(buf, obj, version)

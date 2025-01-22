@@ -337,7 +337,7 @@ impl PySymbolExpr {
                 Ok(Self {expr: &self.expr / &SymbolExpr::Value( Value::from(r.clone()))})
             },
             ParameterValue::Complex(c) => {
-                let t = c.re*c.re + c.im*c.im;
+                let t = (c.re*c.re + c.im*c.im).sqrt();
                 if t < f64::EPSILON && t > -f64::EPSILON {
                     Err(pyo3::exceptions::PyZeroDivisionError::new_err("Division by zero"))
                 } else {
