@@ -150,6 +150,7 @@ impl PySymbolExpr {
         match self.expr.eval(true) {
             Some(v) => match v {
                 Value::Real(r) => Ok(Complex64::from(r)),
+                Value::Int(r) => Ok(Complex64::from(r as f64)),
                 Value::Complex(c) => Ok(c),
             },
             None=> Err(pyo3::exceptions::PyRuntimeError::new_err("Expression has some undefined symbols.")),
@@ -159,6 +160,7 @@ impl PySymbolExpr {
         match self.expr.eval(true) {
             Some(v) => match v {
                 Value::Real(r) => Ok(r),
+                Value::Int(r) => Ok(r as f64),
                 Value::Complex(c) => Err(pyo3::exceptions::PyTypeError::new_err("complex can not be converted to float")),
             },
             None=> Err(pyo3::exceptions::PyRuntimeError::new_err("Expression has some undefined symbols.")),
@@ -168,6 +170,7 @@ impl PySymbolExpr {
         match self.expr.eval(true) {
             Some(v) => match v {
                 Value::Real(r) => Ok(r as i64),
+                Value::Int(r) => Ok(r),
                 Value::Complex(c) => Err(pyo3::exceptions::PyTypeError::new_err("complex can not be converted to int")),
             },
             None=> Err(pyo3::exceptions::PyRuntimeError::new_err("Expression has some undefined symbols.")),
@@ -232,6 +235,7 @@ impl PySymbolExpr {
                 } else {
                     Ok(Self {expr: bound})
                 },
+                Value::Int(r) => Ok(Self {expr: bound}),
                 Value::Complex(c) => if c.re == f64::INFINITY || c.im == f64::INFINITY {
                     Err(pyo3::exceptions::PyZeroDivisionError::new_err("zero division occurs while binding parameter"))
                 } else {

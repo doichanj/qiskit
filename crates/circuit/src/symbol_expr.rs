@@ -37,6 +37,7 @@ pub struct Symbol {
 #[derive(Debug, Clone)]
 pub enum Value {
     Real(f64),
+    Int(i64),
     Complex(Complex64),
 }
 
@@ -137,6 +138,7 @@ impl SymbolExpr {
         match self.eval(true) {
             Some(v) => match v {
                 Value::Real(r) => Some(r),
+                Value::Int(r) => Some(r as f64),
                 Value::Complex(c) => Some(c.re),
             }
             None => None,
@@ -146,6 +148,7 @@ impl SymbolExpr {
         match self.eval(true) {
             Some(v) => match v {
                 Value::Real(_) => Some(0.0),
+                Value::Int(_) => Some(0.0),
                 Value::Complex(c) => Some(c.im),
             }
             None => None,
@@ -155,6 +158,7 @@ impl SymbolExpr {
         match self.eval(true) {
             Some(v) => match v {
                 Value::Real(_) => Some(0.0.into()),
+                Value::Int(_) => Some(0.0.into()),
                 Value::Complex(c) => Some(c),
             }
             None => None,
@@ -217,6 +221,7 @@ impl SymbolExpr {
         match self.eval(true) {
             Some(v) => match v {
                 Value::Real(_) => Some(true),
+                Value::Int(_) => Some(false),
                 Value::Complex(c) => Some(c.im < f64::EPSILON && c.im > -f64::EPSILON),
             },
             None => None,
@@ -226,6 +231,9 @@ impl SymbolExpr {
     pub fn is_int(&self) -> Option<bool> {
         match self.eval(true) {
             Some(v) => match v {
+                Value::Int(_) => Some(true),
+                _ => Some(false),
+                /*
                 Value::Real(r) => {
                     let t = r - r.floor();
                     return Some(t < f64::EPSILON && t > -f64::EPSILON);
@@ -238,6 +246,7 @@ impl SymbolExpr {
                         return Some(false);
                     }
                 },
+                */
             },
             None => None,
         }
@@ -683,6 +692,7 @@ impl Value {
     pub fn to_string(&self) -> String {
         match self {
             Value::Real(e) => e.to_string(),
+            Value::Int(e) => e.to_string(),
             Value::Complex(e) => if e.re < f64::EPSILON && e.re > -f64::EPSILON {
                 if e.im < f64::EPSILON && e.im > -f64::EPSILON {
                     0.to_string()
@@ -699,6 +709,7 @@ impl Value {
     pub fn as_real(&self) -> f64 {
         match self {
             Value::Real(e) => *e,
+            Value::Int(e) => *e as f64,
             Value::Complex(e) => (e.re*e.re + e.im*e.im).sqrt(),
         }
     }
@@ -706,60 +717,70 @@ impl Value {
     pub fn abs(&self) -> Value {
         match self {
             Value::Real(e) => Value::Real(e.abs()),
+            Value::Int(e) => Value::Int(e.abs()),
             Value::Complex(e) => Value::Real((e.re*e.re + e.im*e.im).sqrt()),
         }
     }
     pub fn sin(&self) -> Value {
         match self {
             Value::Real(e) => Value::Real(e.sin()),
+            Value::Int(e) => Value::Real((*e as f64).sin()),
             Value::Complex(e) => Value::Complex(e.sin()),
         }
     }
     pub fn asin(&self) -> Value {
         match self {
             Value::Real(e) => Value::Real(e.asin()),
+            Value::Int(e) => Value::Real((*e as f64).asin()),
             Value::Complex(e) => Value::Complex(e.asin()),
         }
     }
     pub fn cos(&self) -> Value {
         match self {
             Value::Real(e) => Value::Real(e.cos()),
+            Value::Int(e) => Value::Real((*e as f64).cos()),
             Value::Complex(e) => Value::Complex(e.cos()),
         }
     }
     pub fn acos(&self) -> Value {
         match self {
             Value::Real(e) => Value::Real(e.acos()),
+            Value::Int(e) => Value::Real((*e as f64).acos()),
             Value::Complex(e) => Value::Complex(e.acos()),
         }
     }
     pub fn tan(&self) -> Value {
         match self {
             Value::Real(e) => Value::Real(e.tan()),
+            Value::Int(e) => Value::Real((*e as f64).tan()),
             Value::Complex(e) => Value::Complex(e.tan()),
         }
     }
     pub fn atan(&self) -> Value {
         match self {
             Value::Real(e) => Value::Real(e.atan()),
+            Value::Int(e) => Value::Real((*e as f64).atan()),
             Value::Complex(e) => Value::Complex(e.atan()),
         }
     }
     pub fn exp(&self) -> Value {
         match self {
             Value::Real(e) => Value::Real(e.exp()),
+            Value::Int(e) => Value::Real((*e as f64).exp()),
             Value::Complex(e) => Value::Complex(e.exp()),
         }
     }
     pub fn log(&self) -> Value {
         match self {
             Value::Real(e) => Value::Real(e.ln()),
+            Value::Int(e) => Value::Real((*e as f64).ln()),
             Value::Complex(e) => Value::Complex(e.ln()),
         }
     }
     pub fn sqrt(&self) -> Value {
         match self {
             Value::Real(e) => Value::Real(e.sqrt()),
+            Value::Int(e) => Value::Real((*e as f64).sqrt()),
             Value::Complex(e) => Value::Complex(e.sqrt()),
         }
     }
@@ -771,10 +792,17 @@ impl Value {
                 } else {
                     Value::Real(e.powf(r))
                 },
+                Value::Int(i) => if *e < 0.0 {
+                    Value::Complex(Complex64::from(e).powf(i as f64))
+                } else {
+                    Value::Real(e.powf(i as f64))
+                },
                 Value::Complex(r) => Value::Complex(Complex64::from(e).powc(r)),
             },
+            Value::Int(e) => Value::Real(*e as f64).pow(p),
             Value::Complex(e) => match p {
                 Value::Real(r) => Value::Complex(e.powf(r)),
+                Value::Int(r) => Value::Complex(e.powf(r as f64)),
                 Value::Complex(r) => Value::Complex(e.powc(r)),
             },
         }
@@ -787,6 +815,13 @@ impl Value {
                 Value::Real(-1.0)
             } else {
                 Value::Real(0.0)
+            }
+            Value::Int(e) => if *e > 0 {
+                Value::Int(1)
+            } else if *e < 0 {
+                Value::Int(1)
+            } else {
+                Value::Int(0)
             }
             Value::Complex(_) => self.clone(),
         }
@@ -801,7 +836,7 @@ impl From<f64> for Value {
 
 impl From<i64> for Value {
     fn from(v: i64) -> Self {
-        Value::Real(v as f64)
+        Value::Int(v)
     }
 }
 
@@ -814,7 +849,6 @@ impl From<Complex64> for Value {
         }
     }
 }
-
 
 impl Add for Value {
     type Output = Value;
@@ -829,10 +863,17 @@ impl Add for &Value {
         match self {
             Value::Real(l) => match rhs {
                 Value::Real(r) => Value::Real(l + r),
+                Value::Int(r) => Value::Real(l + *r as f64),
                 Value::Complex(r) => Value::Complex(l + r),
+            },
+            Value::Int(l) => match rhs {
+                Value::Real(r) => Value::Real(*l as f64 + r),
+                Value::Int(r) => Value::Int(l + r),
+                Value::Complex(r) => Value::Complex(*l as f64 + r),
             },
             Value::Complex(l) => match rhs {
                 Value::Real(r) => Value::Complex(l + r),
+                Value::Int(r) => Value::Complex(l + *r as f64),
                 Value::Complex(r) => Value::Complex(l + r),
             },
         }
@@ -852,10 +893,17 @@ impl Sub for &Value {
         match self {
             Value::Real(l) => match rhs {
                 Value::Real(r) => Value::Real(l - r),
+                Value::Int(r) => Value::Real(l - *r as f64),
                 Value::Complex(r) => Value::Complex(l - r),
+            },
+            Value::Int(l) => match rhs {
+                Value::Real(r) => Value::Real(*l as f64 - r),
+                Value::Int(r) => Value::Int(l - r),
+                Value::Complex(r) => Value::Complex(*l as f64 - r),
             },
             Value::Complex(l) => match rhs {
                 Value::Real(r) => Value::Complex(l - r),
+                Value::Int(r) => Value::Complex(l - *r as f64),
                 Value::Complex(r) => Value::Complex(l - r),
             },
         }
@@ -875,10 +923,17 @@ impl Mul for &Value {
         match self {
             Value::Real(l) => match rhs {
                 Value::Real(r) => Value::Real(l * r),
+                Value::Int(r) => Value::Real(l * *r as f64),
                 Value::Complex(r) => Value::Complex(l * r),
+            },
+            Value::Int(l) => match rhs {
+                Value::Real(r) => Value::Real(*l as f64 * r),
+                Value::Int(r) => Value::Int(l * r),
+                Value::Complex(r) => Value::Complex(*l as f64 * r),
             },
             Value::Complex(l) => match rhs {
                 Value::Real(r) => Value::Complex(l * r),
+                Value::Int(r) => Value::Complex(l * *r as f64),
                 Value::Complex(r) => Value::Complex(l * r),
             },
         }
@@ -898,10 +953,17 @@ impl Div for &Value {
         match self {
             Value::Real(l) => match rhs {
                 Value::Real(r) => Value::Real(l / r),
+                Value::Int(r) => Value::Real(l / *r as f64),
                 Value::Complex(r) => Value::Complex(l / r),
+            },
+            Value::Int(l) => match rhs {
+                Value::Real(r) => Value::Real(*l as f64 / r),
+                Value::Int(r) => Value::Int(l / r),
+                Value::Complex(r) => Value::Complex(*l as f64 / r),
             },
             Value::Complex(l) => match rhs {
                 Value::Real(r) => Value::Complex(l / r),
+                Value::Int(r) => Value::Complex(l / *r as f64),
                 Value::Complex(r) => Value::Complex(l / r),
             },
         }
@@ -920,6 +982,7 @@ impl Neg for &Value {
     fn neg(self) -> Value {
         match self {
             Value::Real(v) => Value::Real( -v),
+            Value::Int(v) => Value::Int( -v),
             Value::Complex(v) => Value::Complex( -v),
         }
     }
@@ -931,14 +994,27 @@ impl PartialEq for Value {
         match self {
             Value::Real(e) => match r {
                 Value::Real(rv) => (e - rv).abs() < f64::EPSILON,
+                Value::Int(rv) => (e - *rv as f64).abs() < f64::EPSILON,
                 Value::Complex(rv) => {
                     let t = Complex64::from(*e) - rv;
+                    return t.re < f64::EPSILON && t.re > -f64::EPSILON && t.im < f64::EPSILON && t.im > -f64::EPSILON;
+                },
+            },
+            Value::Int(e) => match r {
+                Value::Int(rv) => e == rv,
+                Value::Real(rv) => (*e as f64 - rv).abs() < f64::EPSILON,
+                Value::Complex(rv) => {
+                    let t = Complex64::from(*e as f64) - rv;
                     return t.re < f64::EPSILON && t.re > -f64::EPSILON && t.im < f64::EPSILON && t.im > -f64::EPSILON;
                 },
             },
             Value::Complex(e) => match r {
                 Value::Real(rv) => {
                     let t = *e - Complex64::from(rv);
+                    return t.re < f64::EPSILON && t.re > -f64::EPSILON && t.im < f64::EPSILON && t.im > -f64::EPSILON;
+                },
+                Value::Int(rv) => {
+                    let t = *e - Complex64::from(*rv as f64);
                     return t.re < f64::EPSILON && t.re > -f64::EPSILON && t.im < f64::EPSILON && t.im > -f64::EPSILON;
                 },
                 Value::Complex(rv) =>{
@@ -954,6 +1030,7 @@ impl PartialEq<f64> for Value {
     fn eq(&self, r: &f64) -> bool {
         match self {
             Value::Real(e) => (e - r).abs() < f64::EPSILON,
+            Value::Int(e) => (*e as f64 - r).abs() < f64::EPSILON,
             Value::Complex(e) => {
                 let t = *e - Complex64::from(r);
                 return t.re < f64::EPSILON && t.re > -f64::EPSILON && t.im < f64::EPSILON && t.im > -f64::EPSILON;
@@ -967,6 +1044,10 @@ impl PartialEq<Complex64> for Value {
         match self {
             Value::Real(e) => {
                 let t = Complex64::from(*e) - r;
+                return t.re < f64::EPSILON && t.re > -f64::EPSILON && t.im < f64::EPSILON && t.im > -f64::EPSILON;
+            },
+            Value::Int(e) => {
+                let t = Complex64::from(*e as f64) - r;
                 return t.re < f64::EPSILON && t.re > -f64::EPSILON && t.im < f64::EPSILON && t.im > -f64::EPSILON;
             },
             Value::Complex(e) => {
@@ -1097,6 +1178,7 @@ impl Unary {
         };
         match ret {
             Value::Real(_) => Some(ret),
+            Value::Int(_) => Some(ret),
             Value::Complex(c) => if c.im < f64::EPSILON && c.im > -f64::EPSILON {
                 Some(Value::Real(c.re))
             } else {
@@ -1159,6 +1241,7 @@ impl Binary {
             },
             SymbolExpr::Value(e) => match e {
                 Value::Real(v) => *v < 0.0,
+                Value::Int(v) => *v < 0,
                 Value::Complex(_) => true,
             },
             _ => false,
@@ -1170,6 +1253,7 @@ impl Binary {
             },
             SymbolExpr::Value(e) => match e {
                 Value::Real(v) => *v < 0.0,
+                Value::Int(v) => *v < 0,
                 Value::Complex(_) => true,
             },
             _ => false,
@@ -1381,6 +1465,7 @@ impl Binary {
         };
         match ret {
             Value::Real(_) => Some(ret),
+            Value::Int(_) => Some(ret),
             Value::Complex(c) => if c.im < f64::EPSILON && c.im > -f64::EPSILON {
                 Some(Value::Real(c.re))
             } else {
