@@ -80,10 +80,10 @@ impl ParameterExpression {
         self.expr_.complex()
     }
 
-    pub fn is_complex(&self) -> bool {
+    pub fn is_complex(&self) -> Option<bool> {
         self.expr_.is_complex()
     }
-    pub fn is_real(&self) -> bool {
+    pub fn is_real(&self) -> Option<bool> {
         self.expr_.is_real()
     }
 

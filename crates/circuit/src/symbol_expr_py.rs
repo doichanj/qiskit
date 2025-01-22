@@ -141,8 +141,10 @@ impl PySymbolExpr {
             expr: self.expr.abs(),
         }
     }
-    pub fn sign(&self) -> f64 {
-        self.expr.sign()
+    pub fn sign(&self) -> Self {
+        Self {
+            expr: self.expr.sign(),
+        }
     }
     pub fn complex(&self) -> PyResult<Complex64> {
         match self.expr.eval(true) {
@@ -157,7 +159,7 @@ impl PySymbolExpr {
         match self.expr.eval(true) {
             Some(v) => match v {
                 Value::Real(r) => Ok(r),
-                Value::Complex(c) => Ok(c.re),
+                Value::Complex(c) => Err(pyo3::exceptions::PyTypeError::new_err("complex can not be converted to float")),
             },
             None=> Err(pyo3::exceptions::PyRuntimeError::new_err("Expression has some undefined symbols.")),
         }
@@ -166,7 +168,7 @@ impl PySymbolExpr {
         match self.expr.eval(true) {
             Some(v) => match v {
                 Value::Real(r) => Ok(r as i64),
-                Value::Complex(c) => Ok(c.re as i64),
+                Value::Complex(c) => Err(pyo3::exceptions::PyTypeError::new_err("complex can not be converted to int")),
             },
             None=> Err(pyo3::exceptions::PyRuntimeError::new_err("Expression has some undefined symbols.")),
         }
@@ -189,15 +191,15 @@ impl PySymbolExpr {
     }
 
     #[getter]
-    pub fn is_real(&self) -> bool {
+    pub fn is_real(&self) -> Option<bool> {
         self.expr.is_real()
     }
     #[getter]
-    pub fn is_complex(&self) -> bool {
+    pub fn is_complex(&self) -> Option<bool> {
         self.expr.is_complex()
     }
     #[getter]
-    pub fn is_int(&self) -> bool {
+    pub fn is_int(&self) -> Option<bool> {
         self.expr.is_int()
     }
 
@@ -327,22 +329,51 @@ impl PySymbolExpr {
             ParameterValue::Expr(e) => Self {expr: &e.expr * &self.expr},
         }
     }
-    pub fn __truediv__(&self, rhs: ParameterValue) -> Self {
+    pub fn __truediv__(&self, rhs: ParameterValue) -> PyResult<Self> {
         match rhs {
-            ParameterValue::Real(r) => Self {expr: &self.expr / &SymbolExpr::Value( Value::from(r.clone()))},
-            ParameterValue::Complex(c) => Self {expr: &self.expr / &SymbolExpr::Value( Value::from(c.clone()))},
-            ParameterValue::Int(r) => Self {expr: &self.expr / &SymbolExpr::Value( Value::from(r.clone()))},
-            ParameterValue::Str(s) => Self {expr: &self.expr / &parse_expression(&s)},
-            ParameterValue::Expr(e) => Self {expr: &self.expr / &e.expr},
+            ParameterValue::Real(r) => if r <f64::EPSILON && r > -f64::EPSILON {
+                Err(pyo3::exceptions::PyZeroDivisionError::new_err("Division by zero"))
+            } else {
+                Ok(Self {expr: &self.expr / &SymbolExpr::Value( Value::from(r.clone()))})
+            },
+            ParameterValue::Complex(c) => {
+                let t = c.re*c.re + c.im*c.im;
+                if t < f64::EPSILON && t > -f64::EPSILON {
+                    Err(pyo3::exceptions::PyZeroDivisionError::new_err("Division by zero"))
+                } else {
+                    Ok(Self {expr: &self.expr / &SymbolExpr::Value( Value::from(c.clone()))})
+                }
+            },
+            ParameterValue::Int(r) => if r == 0 {
+                Err(pyo3::exceptions::PyZeroDivisionError::new_err("Division by zero"))
+            } else {
+                Ok(Self {expr: &self.expr / &SymbolExpr::Value( Value::from(r.clone()))})
+            },
+            ParameterValue::Str(s) => {
+                let r = parse_expression(&s);
+                if r == 0.0 {
+                    Err(pyo3::exceptions::PyZeroDivisionError::new_err("Division by zero"))
+                } else {
+                    Ok(Self {expr: &self.expr / &r})
+                }
+            },
+            ParameterValue::Expr(e) => if e.expr == 0.0 {
+                Err(pyo3::exceptions::PyZeroDivisionError::new_err("Division by zero"))
+            } else {
+                Ok(Self {expr: &self.expr / &e.expr})
+            },
         }
     }
-    pub fn __rtruediv__(&self, rhs: ParameterValue) -> Self {
+    pub fn __rtruediv__(&self, rhs: ParameterValue) -> PyResult<Self> {
+        if self.expr == 0.0 {
+            return Err(pyo3::exceptions::PyZeroDivisionError::new_err("Division by zero"));
+        }
         match rhs {
-            ParameterValue::Real(r) => Self {expr: &SymbolExpr::Value( Value::from(r.clone())) / &self.expr},
-            ParameterValue::Complex(c) => Self {expr: &SymbolExpr::Value( Value::from(c.clone())) / &self.expr},
-            ParameterValue::Int(r) => Self {expr: &SymbolExpr::Value( Value::from(r.clone())) / &self.expr},
-            ParameterValue::Str(s) => Self {expr: &parse_expression(&s) / &self.expr},
-            ParameterValue::Expr(e) => Self {expr: &e.expr / &self.expr},
+            ParameterValue::Real(r) => Ok(Self {expr: &SymbolExpr::Value( Value::from(r.clone())) / &self.expr}),
+            ParameterValue::Complex(c) => Ok(Self {expr: &SymbolExpr::Value( Value::from(c.clone())) / &self.expr}),
+            ParameterValue::Int(r) => Ok(Self {expr: &SymbolExpr::Value( Value::from(r.clone())) / &self.expr}),
+            ParameterValue::Str(s) => Ok(Self {expr: &parse_expression(&s) / &self.expr}),
+            ParameterValue::Expr(e) => Ok(Self {expr: &e.expr / &self.expr}),
         }
     }
     pub fn __pow__(&self, rhs: ParameterValue, _modulo: Option<i32>) -> Self {
@@ -439,6 +470,6 @@ pub fn log(expr: &PySymbolExpr) -> PySymbolExpr {
 }
 
 #[pyfunction]
-pub fn sign(expr: &PySymbolExpr) -> f64 {
+pub fn sign(expr: &PySymbolExpr) -> PySymbolExpr {
     expr.sign()
 }

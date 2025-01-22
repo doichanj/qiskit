@@ -55,6 +55,7 @@ pub enum UnaryOps {
     Atan,
     Exp,
     Log,
+    Sign,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -128,31 +129,8 @@ impl SymbolExpr {
         }
     }
 
-    pub fn sign(&self) -> f64 {
-        match self.eval(true) {
-            Some(v) => if v.as_real() > 0.0 {
-                1.0
-            } else if v.as_real() < 0.0 {
-                -1.0
-            } else {
-                0.0
-            },
-            None => match self {
-                SymbolExpr::Symbol(_) => 1.0,
-                SymbolExpr::Value(e) => match e {
-                    Value::Real(r) => if *r > 0.0 {
-                        return 1.0;
-                    } else if *r < 0.0 {
-                        return -1.0;
-                    } else {
-                        return 0.0;
-                    },
-                    Value::Complex(_) => 0.0,
-                },
-                SymbolExpr::Unary(e) => e.sign(),
-                SymbolExpr::Binary(e) => e.sign(),
-            },
-        }
+    pub fn sign(&self) -> SymbolExpr {
+        SymbolExpr::Unary( Arc::new( Unary{ op: UnaryOps::Sign, expr: self.clone()}) )
     }
 
     pub fn real(&self) -> Option<f64> {
@@ -225,47 +203,43 @@ impl SymbolExpr {
         }
     }
 
-    pub fn is_complex(&self) -> bool {
-        match self {
-            SymbolExpr::Symbol(_) => false,
-            SymbolExpr::Value(e) => match e {
-                Value::Complex(_) => true,
-                _ => false,
+    pub fn is_complex(&self) -> Option<bool> {
+        match self.eval(true) {
+            Some(v) => match v {
+                Value::Complex(_) => Some(true),
+                _ => Some(false),
             },
-            SymbolExpr::Unary(e) => e.expr.is_complex(),
-            SymbolExpr::Binary(e) => e.lhs.is_complex() || e.rhs.is_complex(),
+            None => None,
         }
     }
-    pub fn is_real(&self) -> bool {
-        match self {
-            SymbolExpr::Symbol(_) => true,
-            SymbolExpr::Value(e) => match e {
-                Value::Real(_) => true,
-                _ => false,
+
+    pub fn is_real(&self) -> Option<bool> {
+        match self.eval(true) {
+            Some(v) => match v {
+                Value::Real(_) => Some(true),
+                Value::Complex(c) => Some(c.im < f64::EPSILON && c.im > -f64::EPSILON),
             },
-            SymbolExpr::Unary(e) => e.expr.is_real(),
-            SymbolExpr::Binary(e) => e.lhs.is_real() && e.rhs.is_real(),
+            None => None,
         }
     }
-    pub fn is_int(&self) -> bool {
-        match self {
-            SymbolExpr::Symbol(_) => false,
-            SymbolExpr::Value(e) => match e {
+
+    pub fn is_int(&self) -> Option<bool> {
+        match self.eval(true) {
+            Some(v) => match v {
                 Value::Real(r) => {
                     let t = r - r.floor();
-                    return t < f64::EPSILON && t > -f64::EPSILON;
-                }
+                    return Some(t < f64::EPSILON && t > -f64::EPSILON);
+                },
                 Value::Complex(c) => {
                     if c.im < f64::EPSILON && c.im > -f64::EPSILON {
                         let t = c.re - c.re.floor();
-                        return t < f64::EPSILON && t > -f64::EPSILON;
+                        return Some(t < f64::EPSILON && t > -f64::EPSILON);
                     } else {
-                        return false;
+                        return Some(false);
                     }
-                }
+                },
             },
-            SymbolExpr::Unary(e) => e.expr.is_int(),
-            SymbolExpr::Binary(e) => e.lhs.is_int() && e.rhs.is_int(),
+            None => None,
         }
     }
 
@@ -729,70 +703,70 @@ impl Value {
         }
     }
 
-    pub fn abs(self) -> Value {
+    pub fn abs(&self) -> Value {
         match self {
             Value::Real(e) => Value::Real(e.abs()),
             Value::Complex(e) => Value::Real((e.re*e.re + e.im*e.im).sqrt()),
         }
     }
-    pub fn sin(self) -> Value {
+    pub fn sin(&self) -> Value {
         match self {
             Value::Real(e) => Value::Real(e.sin()),
             Value::Complex(e) => Value::Complex(e.sin()),
         }
     }
-    pub fn asin(self) -> Value {
+    pub fn asin(&self) -> Value {
         match self {
             Value::Real(e) => Value::Real(e.asin()),
             Value::Complex(e) => Value::Complex(e.asin()),
         }
     }
-    pub fn cos(self) -> Value {
+    pub fn cos(&self) -> Value {
         match self {
             Value::Real(e) => Value::Real(e.cos()),
             Value::Complex(e) => Value::Complex(e.cos()),
         }
     }
-    pub fn acos(self) -> Value {
+    pub fn acos(&self) -> Value {
         match self {
             Value::Real(e) => Value::Real(e.acos()),
             Value::Complex(e) => Value::Complex(e.acos()),
         }
     }
-    pub fn tan(self) -> Value {
+    pub fn tan(&self) -> Value {
         match self {
             Value::Real(e) => Value::Real(e.tan()),
             Value::Complex(e) => Value::Complex(e.tan()),
         }
     }
-    pub fn atan(self) -> Value {
+    pub fn atan(&self) -> Value {
         match self {
             Value::Real(e) => Value::Real(e.atan()),
             Value::Complex(e) => Value::Complex(e.atan()),
         }
     }
-    pub fn exp(self) -> Value {
+    pub fn exp(&self) -> Value {
         match self {
             Value::Real(e) => Value::Real(e.exp()),
             Value::Complex(e) => Value::Complex(e.exp()),
         }
     }
-    pub fn log(self) -> Value {
+    pub fn log(&self) -> Value {
         match self {
             Value::Real(e) => Value::Real(e.ln()),
             Value::Complex(e) => Value::Complex(e.ln()),
         }
     }
-    pub fn sqrt(self) -> Value {
+    pub fn sqrt(&self) -> Value {
         match self {
             Value::Real(e) => Value::Real(e.sqrt()),
             Value::Complex(e) => Value::Complex(e.sqrt()),
         }
     }
-    pub fn pow(self, p: Value) -> Value {
+    pub fn pow(&self, p: Value) -> Value {
         match self {
             Value::Real(e) => match p {
-                Value::Real(r) => if e < 0.0 {
+                Value::Real(r) => if *e < 0.0 {
                     Value::Complex(Complex64::from(e).powf(r))
                 } else {
                     Value::Real(e.powf(r))
@@ -803,6 +777,18 @@ impl Value {
                 Value::Real(r) => Value::Complex(e.powf(r)),
                 Value::Complex(r) => Value::Complex(e.powc(r)),
             },
+        }
+    }
+    pub fn sign(&self) -> Value {
+        match self {
+            Value::Real(e) => if *e > f64::EPSILON {
+                Value::Real(1.0)
+            } else if *e < -f64::EPSILON {
+                Value::Real(-1.0)
+            } else {
+                Value::Real(0.0)
+            }
+            Value::Complex(_) => self.clone(),
         }
     }
 }
@@ -1019,6 +1005,7 @@ impl Unary {
             UnaryOps::Atan => String::from(format!("atan({})", s)),
             UnaryOps::Exp => String::from(format!("exp({})", s)),
             UnaryOps::Log => String::from(format!("log({})", s)),
+            UnaryOps::Sign => String::from(format!("sign({})", s)),
         }
     }
 
@@ -1077,23 +1064,8 @@ impl Unary {
             },
             UnaryOps::Exp => SymbolExpr::Unary( Arc::new( Unary {op: UnaryOps::Exp, expr: self.expr.clone()})) * expr_d,
             UnaryOps::Log => expr_d / self.expr.clone(),
-        }       
-    }
-    pub fn sign(&self) -> f64 {
-        match self.op {
-            UnaryOps::Abs => 1.0,
-            UnaryOps::Neg => -self.expr.sign(),
-            _ => match self.expr.eval(true) {
-                Some(v) => if v.as_real() > 0.0 {
-                    1.0
-                } else if v.as_real() < 0.0 {
-                    -1.0
-                } else {
-                    0.0
-                },
-                None => self.expr.sign(),
-            }
-        }
+            UnaryOps::Sign => SymbolExpr::Unary( Arc::new( Unary {op: UnaryOps::Sign, expr: expr_d})),
+        }      
     }
 
     pub fn eval(&self, recurse: bool) -> Option<Value> {
@@ -1121,10 +1093,11 @@ impl Unary {
             UnaryOps::Atan => val.atan(),
             UnaryOps::Exp => val.exp(),
             UnaryOps::Log => val.log(),
+            UnaryOps::Sign => val.sign(),
         };
         match ret {
             Value::Real(_) => Some(ret),
-            Value::Complex(c) => if c.im == 0.0 {
+            Value::Complex(c) => if c.im < f64::EPSILON && c.im > -f64::EPSILON {
                 Some(Value::Real(c.re))
             } else {
                 Some(ret)
@@ -1376,61 +1349,6 @@ impl Binary {
                 }
             },
         }       
-    }
-
-    pub fn sign(&self) -> f64 {
-        let l = self.lhs.sign();
-        let r = self.rhs.sign();
-        if l == 0.0 {
-            if r == 0.0 {
-                0.0
-            }
-            else {
-                match self.op {
-                    BinaryOps::Add => r,
-                    BinaryOps::Sub => -r,
-                    BinaryOps::Mul => 0.0,
-                    BinaryOps::Div => 1.0,
-                    BinaryOps::Pow => 0.0,
-                }
-            }
-        } else {
-            if r == 0.0 {
-                match self.op {
-                    BinaryOps::Add => l,
-                    BinaryOps::Sub => l,
-                    BinaryOps::Mul => 0.0,
-                    BinaryOps::Div => 0.0,
-                    BinaryOps::Pow => 1.0,
-                }
-            } else {
-                match self.op {
-                    BinaryOps::Add => l*r,
-                    BinaryOps::Sub => -l*r,
-                    BinaryOps::Mul => l*r,
-                    BinaryOps::Div => l*r,
-                    BinaryOps::Pow => if l == 1.0 {
-                        1.0
-                    } else {
-                        match &self.rhs {
-                            SymbolExpr::Value(v) => match v {
-                                Value::Real(r) => if *r - (*r as u64) as f64 == 0.0 {
-                                    if *r as u64 % 2 == 0 {
-                                        1.0
-                                    } else {
-                                        -1.0
-                                    }
-                                } else {
-                                    l
-                                },
-                                Value::Complex(_) => l,
-                            }
-                            _ => l,
-                        }
-                    },
-                }
-            }
-        }
     }
 
     pub fn eval(&self, recurse: bool) -> Option<Value> {
