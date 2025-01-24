@@ -33,12 +33,12 @@ pub struct PySymbolExpr {
 // enum for argument for operators
 #[derive(FromPyObject, Clone, Debug)]
 pub enum ParameterValue {
-    #[pyo3(transparent, annotation = "complex")]
-    Complex(Complex64),
-    #[pyo3(transparent, annotation = "float")]
-    Real(f64),
     #[pyo3(transparent, annotation = "int")]
     Int(i64),
+    #[pyo3(transparent, annotation = "float")]
+    Real(f64),
+    #[pyo3(transparent, annotation = "complex")]
+    Complex(Complex64),
     #[pyo3(transparent, annotation = "str")]
     Str(String),
     Expr(PySymbolExpr),
@@ -46,10 +46,12 @@ pub enum ParameterValue {
 
 #[derive(FromPyObject, Clone, Debug)]
 pub enum BindValue {
-    #[pyo3(transparent, annotation = "complex")]
-    Complex(Complex64),
+    #[pyo3(transparent, annotation = "int")]
+    Int(i64),
     #[pyo3(transparent, annotation = "float")]
     Real(f64),
+    #[pyo3(transparent, annotation = "complex")]
+    Complex(Complex64),
 }
 
 
@@ -87,6 +89,12 @@ impl PySymbolExpr {
             ParameterValue::Str(s) => PySymbolExpr { expr: parse_expression(&s)},
             ParameterValue::Expr(e) => PySymbolExpr { expr: e.expr},
         }
+    }
+
+    // this is called for np.complex128 because np.complex is recognized as Real in Value function
+    #[staticmethod]
+    pub fn Complex(value: Complex64) -> Self {
+        PySymbolExpr { expr: SymbolExpr::Value( Value::from(value))}
     }
 
     #[staticmethod]
@@ -225,6 +233,7 @@ impl PySymbolExpr {
                     match val {
                         BindValue::Complex(c) => Value::from(c.clone()),
                         BindValue::Real(r) => Value::from(r.clone()),
+                        BindValue::Int(r) => Value::from(r.clone()),
                     },
                 )).collect();
         let bound = self.expr.bind(&maps);
@@ -245,6 +254,34 @@ impl PySymbolExpr {
             _ => Ok(Self {expr: bound}),
         }
     }
+    // this function is used for numpy.complex128
+    pub fn bind_complex(&self, in_maps: HashMap<String, Complex64>) -> PyResult<Self> {
+        let maps : HashMap::<String, Value> = 
+            in_maps
+                .iter()
+                .map(|(key, val)| (
+                    key.clone(),
+                    Value::from(val.clone()),
+                )).collect();
+        let bound = self.expr.bind(&maps);
+        match bound {
+            SymbolExpr::Value(ref v) => match v {
+                Value::Real(r) => if *r == f64::INFINITY {
+                    Err(pyo3::exceptions::PyZeroDivisionError::new_err("zero division occurs while binding parameter"))
+                } else {
+                    Ok(Self {expr: bound})
+                },
+                Value::Int(r) => Ok(Self {expr: bound}),
+                Value::Complex(c) => if c.re == f64::INFINITY || c.im == f64::INFINITY {
+                    Err(pyo3::exceptions::PyZeroDivisionError::new_err("zero division occurs while binding parameter"))
+                } else {
+                    Ok(Self {expr: bound})
+                },
+            },
+            _ => Ok(Self {expr: bound}),
+        }
+    }
+
     pub fn subs(&self, in_maps: HashMap<String, Self>) -> Self {
         let maps : HashMap::<String, SymbolExpr> = 
             in_maps.iter().map(|(key, val)| (key.clone(), val.expr.clone())).collect();

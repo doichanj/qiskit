@@ -10,6 +10,7 @@
 // copyright notice, and modified files need to carry a notice indicating
 // that they have been altered from the originals.
 
+use core::f64;
 use std::sync::Arc;
 use std::ops::{Add, Div, Mul, Sub, Neg};
 use std::convert::From;
@@ -536,6 +537,9 @@ impl Div for &SymbolExpr {
     fn div(self, rhs: Self) -> SymbolExpr {
         if *self == 0.0 {
             SymbolExpr::Value( Value::Real(0.0))
+        } else if *rhs == 0.0 {
+            // return inf to detect divide by zero without panic
+            SymbolExpr::Value(Value::Real(f64::INFINITY))  
         } else if *rhs == 1.0 {
             self.clone()
         } else if *rhs == -1.0 {
@@ -956,10 +960,15 @@ impl Div for &Value {
                 Value::Int(r) => Value::Real(l / *r as f64),
                 Value::Complex(r) => Value::Complex(l / r),
             },
-            Value::Int(l) => match rhs {
-                Value::Real(r) => Value::Real(*l as f64 / r),
-                Value::Int(r) => Value::Int(l / r),
-                Value::Complex(r) => Value::Complex(*l as f64 / r),
+            Value::Int(l) => {
+                if *rhs == 0.0 {
+                    return Value::Real(f64::INFINITY);
+                }
+                match rhs {
+                    Value::Real(r) => Value::Real(*l as f64 / r),
+                    Value::Int(r) => Value::Int(l / r),
+                    Value::Complex(r) => Value::Complex(*l as f64 / r),
+                }
             },
             Value::Complex(l) => match rhs {
                 Value::Real(r) => Value::Complex(l / r),
