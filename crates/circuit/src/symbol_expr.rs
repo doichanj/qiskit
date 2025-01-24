@@ -234,22 +234,29 @@ impl SymbolExpr {
             Some(v) => match v {
                 Value::Int(_) => Some(true),
                 _ => Some(false),
-                /*
-                Value::Real(r) => {
-                    let t = r - r.floor();
-                    return Some(t < f64::EPSILON && t > -f64::EPSILON);
-                },
-                Value::Complex(c) => {
-                    if c.im < f64::EPSILON && c.im > -f64::EPSILON {
-                        let t = c.re - c.re.floor();
-                        return Some(t < f64::EPSILON && t > -f64::EPSILON);
-                    } else {
-                        return Some(false);
-                    }
-                },
-                */
             },
             None => None,
+        }
+    }
+
+    pub fn is_zero(&self) -> bool {
+        match self.eval(true) {
+            Some(v) => v.is_zero(),
+            None => false,
+        }
+    }
+
+    pub fn is_one(&self) -> bool {
+        match self.eval(true) {
+            Some(v) => v.is_one(),
+            None => false,
+        }
+    }
+
+    pub fn is_minus_one(&self) -> bool {
+        match self.eval(true) {
+            Some(v) => v.is_minus_one(),
+            None => false,
         }
     }
 
@@ -377,9 +384,9 @@ impl Add for SymbolExpr {
 impl Add for &SymbolExpr {
     type Output = SymbolExpr;
     fn add(self, rhs: Self) -> SymbolExpr {
-        if *self == 0.0 {
+        if self.is_zero() {
             rhs.clone()
-        } else if *rhs == 0.0 {
+        } else if rhs.is_zero() {
             self.clone()
         } else if *self == *rhs {
             match self {
@@ -432,12 +439,24 @@ impl Sub for SymbolExpr {
 impl Sub for &SymbolExpr {
     type Output = SymbolExpr;
     fn sub(self, rhs: Self) -> SymbolExpr {
-        if *self == 0.0 {
+        if self.is_zero() {
             -rhs.clone()
-        } else if *rhs == 0.0 {
+        } else if rhs.is_zero() {
             self.clone()
         } else if *self == *rhs {
-            SymbolExpr::Value(Value::Real(0.0))
+            let l_is_int = match self.is_int() {
+                Some(i) => i,
+                None => false,
+            };
+            let r_is_int = match rhs.is_int() {
+                Some(i) => i,
+                None => false,
+            };
+            if l_is_int || r_is_int {
+                SymbolExpr::Value(Value::Int(0))    
+            } else {
+                SymbolExpr::Value(Value::Real(0.0))
+            }
         } else {
             match rhs {
                 SymbolExpr::Value(r) => self + &SymbolExpr::Value(-r),
@@ -470,17 +489,17 @@ impl Mul for SymbolExpr {
 impl Mul for &SymbolExpr {
     type Output = SymbolExpr;
     fn mul(self, rhs: Self) -> SymbolExpr {
-        if *self == 0.0 {
-            SymbolExpr::Value( Value::Real(0.0))
-        } else if *rhs == 0.0 {
-            SymbolExpr::Value( Value::Real(0.0))
-        } else if *self == 1.0 {
-            rhs.clone()
-        } else if *rhs == 1.0 {
+        if self.is_zero() {
             self.clone()
-        } else if *self == -1.0 {
+        } else if rhs.is_zero() {
+            rhs.clone()
+        } else if self.is_one() {
+            rhs.clone()
+        } else if rhs.is_one() {
+            self.clone()
+        } else if self.is_minus_one() {
             rhs.neg()
-        } else if *rhs == -1.0 {
+        } else if rhs.is_minus_one() {
             self.neg()
         } else {
             match self {
@@ -535,17 +554,29 @@ impl Div for SymbolExpr {
 impl Div for &SymbolExpr {
     type Output = SymbolExpr;
     fn div(self, rhs: Self) -> SymbolExpr {
-        if *self == 0.0 {
-            SymbolExpr::Value( Value::Real(0.0))
-        } else if *rhs == 0.0 {
+        if self.is_zero() {
+            self.clone()
+        } else if rhs.is_zero() {
             // return inf to detect divide by zero without panic
             SymbolExpr::Value(Value::Real(f64::INFINITY))  
-        } else if *rhs == 1.0 {
+        } else if rhs.is_zero() {
             self.clone()
-        } else if *rhs == -1.0 {
+        } else if rhs.is_minus_one() {
             self.neg()
         } else if *self == *rhs {
-            SymbolExpr::Value(Value::Real(1.0))
+            let l_is_int = match self.is_int() {
+                Some(i) => i,
+                None => false,
+            };
+            let r_is_int = match rhs.is_int() {
+                Some(i) => i,
+                None => false,
+            };
+            if l_is_int || r_is_int {
+                SymbolExpr::Value(Value::Int(1))    
+            } else {
+                SymbolExpr::Value(Value::Real(1.0))
+            }
         } else {
             match self {
                 SymbolExpr::Value(l) => match rhs {
@@ -823,13 +854,37 @@ impl Value {
             Value::Int(e) => if *e > 0 {
                 Value::Int(1)
             } else if *e < 0 {
-                Value::Int(1)
+                Value::Int(-1)
             } else {
                 Value::Int(0)
             }
             Value::Complex(_) => self.clone(),
         }
     }
+
+    pub fn is_zero(&self) -> bool {
+        match self {
+            Value::Real(r) => *r < f64::EPSILON && *r > -f64::EPSILON,
+            Value::Int(i) => *i == 0,
+            Value::Complex(c) => c.re < f64::EPSILON && c.re > -f64::EPSILON && c.im < f64::EPSILON && c.im > -f64::EPSILON,
+        }
+    }
+    pub fn is_one(&self) -> bool {
+        match self {
+            Value::Real(r) => *r-1.0 < f64::EPSILON && *r-1.0 > -f64::EPSILON,
+            Value::Int(i) => *i == 1,
+            Value::Complex(c) => c.re-1.0 < f64::EPSILON && c.re-1.0 > -f64::EPSILON && c.im < f64::EPSILON && c.im > -f64::EPSILON,
+        }
+    }
+    pub fn is_minus_one(&self) -> bool {
+        match self {
+            Value::Real(r) => *r+1.0 < f64::EPSILON && *r+1.0 > -f64::EPSILON,
+            Value::Int(i) => *i == -1,
+            Value::Complex(c) => c.re+1.0 < f64::EPSILON && c.re+1.0 > -f64::EPSILON && c.im < f64::EPSILON && c.im > -f64::EPSILON,
+        }
+    }
+
+
 }
 
 impl From<f64> for Value {
@@ -966,7 +1021,15 @@ impl Div for &Value {
                 }
                 match rhs {
                     Value::Real(r) => Value::Real(*l as f64 / r),
-                    Value::Int(r) => Value::Int(l / r),
+                    Value::Int(r) => {
+                        let t = *l as f64 / *r as f64;
+                        let d = t.floor() - t;
+                        if d < f64::EPSILON && d >= -f64::EPSILON {
+                            Value::Int(t as i64)
+                        } else {
+                            Value::Real(t)
+                        }
+                    },
                     Value::Complex(r) => Value::Complex(*l as f64 / r),
                 }
             },
@@ -1527,8 +1590,8 @@ impl Binary {
 
         if self.lhs == *rhs {
             match self.op {
-                BinaryOps::Add => Some(&(&self.lhs * &SymbolExpr::Value( Value::Real(2.0))) + &self.rhs),
-                BinaryOps::Sub => Some(&(&self.lhs * &SymbolExpr::Value( Value::Real(2.0))) - &self.rhs),
+                BinaryOps::Add => Some(&(&self.lhs * &SymbolExpr::Value( Value::Int(2))) + &self.rhs),
+                BinaryOps::Sub => Some(&(&self.lhs * &SymbolExpr::Value( Value::Int(2))) - &self.rhs),
                 BinaryOps::Mul => match &self.rhs {
                     SymbolExpr::Value(e) => Some(SymbolExpr::Binary( Arc::new( Binary{ op: BinaryOps::Mul, lhs: SymbolExpr::Value(e.clone() + Value::Real(1.0)), rhs: self.lhs.clone()})) ),
                     _ => None,
@@ -1541,7 +1604,7 @@ impl Binary {
             }
         } else if self.rhs == *rhs {
             match self.op {
-                BinaryOps::Add => Some(&self.lhs + &(&self.rhs * &SymbolExpr::Value( Value::Real(2.0)))),
+                BinaryOps::Add => Some(&self.lhs + &(&self.rhs * &SymbolExpr::Value( Value::Int(2)))),
                 BinaryOps::Sub => Some(self.lhs.clone()),
                 BinaryOps::Mul => match &self.lhs {
                     SymbolExpr::Value(e) => Some(SymbolExpr::Binary( Arc::new( Binary{ op: BinaryOps::Mul, lhs: SymbolExpr::Value(e.clone() + Value::Real(1.0)), rhs: self.rhs.clone()})) ),
@@ -1552,9 +1615,10 @@ impl Binary {
         } else{
             match rhs {
                 SymbolExpr::Value(r) => match (&self.lhs, &self.rhs, &self.op) {
-                    (SymbolExpr::Value(l_l), _, BinaryOps::Add | BinaryOps::Sub) => Some(SymbolExpr::Binary( Arc::new( Binary{ op: self.op.clone(), lhs: SymbolExpr::Value(l_l + r), rhs: self.rhs.clone()})) ),
-                    (_, SymbolExpr::Value(l_r), BinaryOps::Add) => Some(SymbolExpr::Binary( Arc::new( Binary{ op: BinaryOps::Add, lhs: SymbolExpr::Value(l_r + r), rhs: self.lhs.clone()})) ),
-                    (_, SymbolExpr::Value(l_r), BinaryOps::Sub) => Some(SymbolExpr::Binary( Arc::new( Binary{ op: BinaryOps::Add, lhs: SymbolExpr::Value(r - l_r), rhs: self.lhs.clone()})) ),
+                    (SymbolExpr::Value(l_l), _, BinaryOps::Add) => Some(&SymbolExpr::Value(l_l + r) + &self.rhs),
+                    (SymbolExpr::Value(l_l), _, BinaryOps::Sub) => Some(&SymbolExpr::Value(l_l + r) - &self.rhs),
+                    (_, SymbolExpr::Value(l_r), BinaryOps::Add) => Some(&SymbolExpr::Value(l_r + r) + &self.lhs),
+                    (_, SymbolExpr::Value(l_r), BinaryOps::Sub) => Some(&SymbolExpr::Value(r - l_r) + &self.lhs),
                     (_, _, _) => None,
                 },
 /*                SymbolExpr::Binary(r) => if r.lhs == self.lhs {
@@ -1650,9 +1714,10 @@ impl Binary {
         } else{
             match rhs {
                 SymbolExpr::Value(r) => match (&self.lhs, &self.rhs, &self.op) {
-                    (SymbolExpr::Value(l_l), _, BinaryOps::Add | BinaryOps::Sub) => Some(SymbolExpr::Binary( Arc::new( Binary{ op: self.op.clone(), lhs: SymbolExpr::Value(l_l - r), rhs: self.rhs.clone()})) ),
-                    (_, SymbolExpr::Value(l_r), BinaryOps::Add) => Some(SymbolExpr::Binary( Arc::new( Binary{ op: BinaryOps::Sub, lhs: self.lhs.clone(), rhs: SymbolExpr::Value(l_r + r)})) ),
-                    (_, SymbolExpr::Value(l_r), BinaryOps::Sub) => Some(SymbolExpr::Binary( Arc::new( Binary{ op: BinaryOps::Sub, lhs: self.lhs.clone(), rhs: SymbolExpr::Value(r - l_r)})) ),
+                    (SymbolExpr::Value(l_l), _, BinaryOps::Add) => Some(&SymbolExpr::Value(l_l - r) + &self.rhs),
+                    (SymbolExpr::Value(l_l), _, BinaryOps::Sub) => Some(&SymbolExpr::Value(l_l - r) - &self.rhs),
+                    (_, SymbolExpr::Value(l_r), BinaryOps::Add) => Some(&SymbolExpr::Value(l_r - r) + &self.lhs),
+                    (_, SymbolExpr::Value(l_r), BinaryOps::Sub) => Some(&self.lhs - &SymbolExpr::Value(l_r - r)),
                     (_, _, _) => None,
                 },
 /*                SymbolExpr::Binary(r) => if r.lhs == self.lhs {
@@ -1693,9 +1758,10 @@ impl Binary {
         }
         match rhs {
             SymbolExpr::Value(r) => match (&self.lhs, &self.rhs, &self.op) {
-                (SymbolExpr::Value(l_l), _, BinaryOps::Mul | BinaryOps::Div) => Some(SymbolExpr::Binary( Arc::new( Binary{ op: self.op.clone(), lhs: SymbolExpr::Value(l_l * r), rhs: self.rhs.clone()})) ),
-                (_, SymbolExpr::Value(l_r), BinaryOps::Mul) => Some(SymbolExpr::Binary( Arc::new( Binary{ op: BinaryOps::Mul, lhs: SymbolExpr::Value(l_r * r), rhs: self.lhs.clone()})) ),
-                (_, SymbolExpr::Value(l_r), BinaryOps::Div) => Some(SymbolExpr::Binary( Arc::new( Binary{ op: BinaryOps::Mul, lhs: SymbolExpr::Value(r / l_r), rhs: self.lhs.clone()})) ),
+                (SymbolExpr::Value(l_l), _, BinaryOps::Mul) => Some(&SymbolExpr::Value(l_l * r) * &self.rhs ),
+                (SymbolExpr::Value(l_l), _, BinaryOps::Div) => Some(&SymbolExpr::Value(l_l * r) / &self.rhs ),
+                (_, SymbolExpr::Value(l_r), BinaryOps::Mul) => Some(&SymbolExpr::Value(l_r * r) * &self.lhs ),
+                (_, SymbolExpr::Value(l_r), BinaryOps::Div) => Some(&SymbolExpr::Value(r / l_r) * &self.lhs ),
                 (_, _, _) => None,
             },
             SymbolExpr::Binary(r) => if r.rhs == self.lhs {
@@ -1753,9 +1819,10 @@ impl Binary {
 
         match rhs {
             SymbolExpr::Value(r) => match (&self.lhs, &self.rhs, &self.op) {
-                (SymbolExpr::Value(l_l), _, BinaryOps::Mul | BinaryOps::Div) => Some(SymbolExpr::Binary( Arc::new( Binary{ op: self.op.clone(), lhs: SymbolExpr::Value(l_l / r), rhs: self.rhs.clone()})) ),
-                (_, SymbolExpr::Value(l_r), BinaryOps::Mul) => Some(SymbolExpr::Binary( Arc::new( Binary{ op: BinaryOps::Mul, lhs: self.lhs.clone(), rhs: SymbolExpr::Value(l_r / r)})) ),
-                (_, SymbolExpr::Value(l_r), BinaryOps::Div) => Some(SymbolExpr::Binary( Arc::new( Binary{ op: BinaryOps::Mul, lhs: self.lhs.clone(), rhs: SymbolExpr::Value(Value::Real(1.0) / (r * l_r))})) ),
+                (SymbolExpr::Value(l_l), _, BinaryOps::Mul) => Some(&SymbolExpr::Value(l_l / r) * &self.rhs),
+                (SymbolExpr::Value(l_l), _, BinaryOps::Div) => Some(&SymbolExpr::Value(l_l / r) / &self.rhs),
+                (_, SymbolExpr::Value(l_r), BinaryOps::Mul) => Some(&SymbolExpr::Value(l_r / r) * &self.lhs),
+                (_, SymbolExpr::Value(l_r), BinaryOps::Div) => Some(&SymbolExpr::Value(Value::Real(1.0) / (r * l_r)) * &self.lhs),
                 (_, _, _) => None,
             },
             SymbolExpr::Binary(r) => if r.rhs == self.lhs {

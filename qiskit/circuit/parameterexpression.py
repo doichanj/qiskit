@@ -190,7 +190,6 @@ class ParameterExpression:
         if isinstance(value, ParameterExpression):
             return self.subs({parameter: value})
         if isinstance(value, numpy.complex128):
-            print("complex128")
             return self.bind({parameter: complex(value)})
         return self.bind({parameter: value})
 
