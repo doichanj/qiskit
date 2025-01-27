@@ -390,10 +390,15 @@ impl Add for &SymbolExpr {
             self.clone()
         } else if *self == *rhs {
             match self {
-                SymbolExpr::Value(l) => SymbolExpr::Value(l * &Value::Real(2.0)),
-                _ => SymbolExpr::Binary( Arc::new(Binary{ op: BinaryOps::Mul, lhs: SymbolExpr::Value( Value::Real(2.0)), rhs: self.clone()} )),
+                SymbolExpr::Value(l) => SymbolExpr::Value(l * &Value::Int(2)),
+                _ => &SymbolExpr::Value( Value::Int(2)) * self,
             }
         } else {
+            if let SymbolExpr::Value(r) = &rhs {
+                if r.is_minus() {
+                    return self - &(-rhs);
+                }
+            }
             match self {
                 SymbolExpr::Value(l) => match rhs {
                     SymbolExpr::Value(r) => SymbolExpr::Value(l + r),
@@ -404,7 +409,6 @@ impl Add for &SymbolExpr {
                     _ => SymbolExpr::Binary( Arc::new( Binary{ op: BinaryOps::Add, lhs: SymbolExpr::Value(l.clone()), rhs: rhs.clone()})),
                 },
                 SymbolExpr::Symbol(l) => match rhs {
-                    SymbolExpr::Value(r) => SymbolExpr::Binary( Arc::new(Binary{ op: BinaryOps::Add, lhs: SymbolExpr::Value(r.clone()), rhs: self.clone()})),
                     SymbolExpr::Symbol(r) => if l.name > r.name {   // sort by name
                         SymbolExpr::Binary( Arc::new(Binary{ op: BinaryOps::Add, lhs: rhs.clone(), rhs: self.clone()}))
                     } else {
@@ -458,8 +462,13 @@ impl Sub for &SymbolExpr {
                 SymbolExpr::Value(Value::Real(0.0))
             }
         } else {
+            if let SymbolExpr::Value(r) = &rhs {
+                if r.is_minus() {
+                    return self + &(-rhs);
+                }
+            }
+
             match rhs {
-                SymbolExpr::Value(r) => self + &SymbolExpr::Value(-r),
                 SymbolExpr::Unary(r) => match r.op {
                     UnaryOps::Neg => self + &r.expr,
                     _ => SymbolExpr::Binary( Arc::new(Binary{ op: BinaryOps::Sub, lhs: self.clone(), rhs: rhs.clone()}) ), 
@@ -726,7 +735,14 @@ impl PartialEq for Symbol {
 impl Value {
     pub fn to_string(&self) -> String {
         match self {
-            Value::Real(e) => e.to_string(),
+            Value::Real(e) => {
+                let t = e.floor() - e;
+                if t < f64::EPSILON && t > -f64::EPSILON {
+                    String::from(format!("{:.1}", e))
+                } else {
+                    e.to_string()
+                }
+            },
             Value::Int(e) => e.to_string(),
             Value::Complex(e) => if e.re < f64::EPSILON && e.re > -f64::EPSILON {
                 if e.im < f64::EPSILON && e.im > -f64::EPSILON {
@@ -745,7 +761,7 @@ impl Value {
         match self {
             Value::Real(e) => *e,
             Value::Int(e) => *e as f64,
-            Value::Complex(e) => (e.re*e.re + e.im*e.im).sqrt(),
+            Value::Complex(e) => e.re,
         }
     }
 
@@ -815,7 +831,15 @@ impl Value {
     pub fn sqrt(&self) -> Value {
         match self {
             Value::Real(e) => Value::Real(e.sqrt()),
-            Value::Int(e) => Value::Real((*e as f64).sqrt()),
+            Value::Int(e) => {
+                let t = (*e as f64).sqrt();
+                let d = t.floor() - t;
+                if d < f64::EPSILON && d >= -f64::EPSILON {
+                    Value::Int(t as i64)
+                } else {
+                    Value::Real(t)
+                }
+            },
             Value::Complex(e) => Value::Complex(e.sqrt()),
         }
     }
@@ -834,7 +858,19 @@ impl Value {
                 },
                 Value::Complex(r) => Value::Complex(Complex64::from(e).powc(r)),
             },
-            Value::Int(e) => Value::Real(*e as f64).pow(p),
+            Value::Int(e) =>  match p {
+                Value::Real(r) =>             {
+                    let t = (*e as f64).powf(r);
+                    let d = t.floor() - t;
+                    if d < f64::EPSILON && d >= -f64::EPSILON {
+                        Value::Int(t as i64)
+                    } else {
+                        Value::Real(t)
+                    }
+                },  
+                Value::Int(r) => Value::Int(e.pow(r as u32)),
+                Value::Complex(r) => Value::Complex(Complex64::from(*e as f64).powc(r)),
+            },
             Value::Complex(e) => match p {
                 Value::Real(r) => Value::Complex(e.powf(r)),
                 Value::Int(r) => Value::Complex(e.powf(r as f64)),
@@ -884,6 +920,13 @@ impl Value {
         }
     }
 
+    pub fn is_minus(&self) -> bool {
+        match self {
+            Value::Real(r) => *r < 0.0,
+            Value::Int(i) => *i < 0,
+            Value::Complex(c) => false,
+        }
+    }
 
 }
 
