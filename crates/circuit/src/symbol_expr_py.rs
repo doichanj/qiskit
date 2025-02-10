@@ -201,6 +201,12 @@ impl PySymbolExpr {
         }
     }
 
+    pub fn expand(&self) -> Self {
+        Self {
+            expr: self.expr.expand(),
+        }
+    }
+
     #[getter]
     pub fn is_real(&self) -> Option<bool> {
         self.expr.is_real()
@@ -463,6 +469,9 @@ impl PySymbolExpr {
         self.expr = parse_expression(&state);
     }
 
+    pub fn print_tree(&self) {
+        self.expr.print_tree();
+    }
 }
 
 #[pyfunction]
