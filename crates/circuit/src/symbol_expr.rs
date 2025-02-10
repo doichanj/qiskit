@@ -1687,29 +1687,54 @@ impl Unary {
 
     // Add with heuristic optimization
     fn add_opt(&self, rhs: &SymbolExpr) -> Option<SymbolExpr> {
-        match self.op {
-            UnaryOps::Neg => match self.expr.sub_opt(rhs) {
-                Some(e) => match e.neg_opt() {
+        if let UnaryOps::Neg = self.op {
+            if let Some(e) = self.expr.sub_opt(rhs) {
+                return match e.neg_opt() {
                     Some(ee) => Some(ee),
                     None => Some(_neg(e)),
-                },
-                None => None,
+                };
+            }
+        }
+
+        match rhs {
+            SymbolExpr::Unary(r) => if self.op == r.op {
+                let t = self.expr.expand() + r.expr.expand();
+                if t.is_zero() {
+                    Some(SymbolExpr::Value(Value::Int(0)))
+                } else {
+                    None
+                }
+            } else {
+                None
             },
             _ => None,
-        }       
+        }
+
     }
     // Sub with heuristic optimization
     fn sub_opt(&self, rhs: &SymbolExpr) -> Option<SymbolExpr> {
-        match self.op {
-            UnaryOps::Neg => match self.expr.add_opt(rhs) {
-                Some(e) => match e.neg_opt() {
+        if let UnaryOps::Neg = self.op {
+            if let Some(e) = self.expr.add_opt(rhs) {
+                return match e.neg_opt() {
                     Some(ee) => Some(ee),
                     None => Some(_neg(e)),
-                },
-                None => None,
+                };
+            }
+        }
+
+        match rhs {
+            SymbolExpr::Unary(r) => if self.op == r.op {
+                let t = self.expr.expand() - r.expr.expand();
+                if t.is_zero() {
+                    Some(SymbolExpr::Value(Value::Int(0)))
+                } else {
+                    None
+                }
+            } else {
+                None
             },
             _ => None,
-        }       
+        }
     }
 
     // mul with heuristic optimization
@@ -2023,7 +2048,7 @@ impl Binary {
                 Some(e) => e,
                 None => _sub(self.lhs.clone(), self.rhs.clone()),
             },
-            _ => _pow(self.lhs.clone(), self.rhs.clone()),
+            _ => _pow(self.lhs.expand(), self.rhs.expand()),
         }
     }
 
@@ -2043,7 +2068,7 @@ impl Binary {
     fn add_opt(&self, rhs: &SymbolExpr) -> Option<SymbolExpr> {
         if let SymbolExpr::Binary(r) = rhs {
             if self.op == r.op {
-                if let BinaryOps::Mul | BinaryOps::Div = self.op {
+                if let BinaryOps::Mul | BinaryOps::Div | BinaryOps::Pow = self.op {
                     if let (SymbolExpr::Value(rv), SymbolExpr::Value(lv)) = (&self.lhs, &r.lhs) {
                         if rv == &-lv {
                             if self.rhs.expand().to_string() == r.rhs.expand().to_string() {
@@ -2136,7 +2161,7 @@ impl Binary {
     fn sub_opt(&self, rhs: &SymbolExpr) -> Option<SymbolExpr> {
         if let SymbolExpr::Binary(r) = rhs {
             if self.op == r.op {
-                if let BinaryOps::Mul | BinaryOps::Div = self.op {
+                if let BinaryOps::Mul | BinaryOps::Div | BinaryOps::Pow = self.op {
                     if let (SymbolExpr::Value(rv), SymbolExpr::Value(lv)) = (&self.lhs, &r.lhs) {
                         if rv == lv {
                             if self.rhs.expand().to_string() == r.rhs.expand().to_string() {
