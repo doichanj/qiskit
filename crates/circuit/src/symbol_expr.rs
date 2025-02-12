@@ -383,6 +383,13 @@ impl SymbolExpr {
         } else if rhs.is_zero() {
             Some(self.clone())
         } else {
+            if let SymbolExpr::Value(_) = rhs {
+                return match rhs.add_opt(&self) {
+                    Some(e) => Some(e),
+                    None => Some(_add(rhs.clone(), self.clone())),
+                }
+            }
+
             match self {
                 SymbolExpr::Value(e) => e.add_opt(rhs),
                 SymbolExpr::Symbol(e) => e.add_opt(rhs),
@@ -405,6 +412,13 @@ impl SymbolExpr {
         } else if rhs.is_zero() {
             Some(self.clone())
         } else {
+            if let SymbolExpr::Value(r) = rhs {
+                return match SymbolExpr::Value(-r).add_opt(&self) {
+                    Some(e) => Some(e),
+                    None => Some(_add(SymbolExpr::Value(-r), self.clone())),
+                }
+            }
+
             match rhs.neg_opt() {
                 Some(e) => match self.add_opt(&e) {
                     Some(ee) => Some(ee),
@@ -444,6 +458,15 @@ impl SymbolExpr {
         } else if rhs.is_minus_one() {
             Some(_neg(self.clone()))
         } else {
+            if let SymbolExpr::Value(_) | SymbolExpr::Symbol(_) = rhs {
+                if let SymbolExpr::Unary(_) = self {
+                    return match rhs.mul_opt(&self) {
+                        Some(e) => Some(e),
+                        None => Some(_mul(rhs.clone(), self.clone())),
+                    }   
+                }
+            }
+    
             match self {
                 SymbolExpr::Unary(e) => e.mul_opt(rhs),
                 SymbolExpr::Binary(e) => e.mul_opt(rhs),
@@ -505,8 +528,26 @@ impl SymbolExpr {
                 }
             }
         }
+        if let SymbolExpr::Unary(r) = rhs {
+            if let UnaryOps::Neg = &r.op {
+                return match self.mul_expand(&r.expr) {
+                    Some(e) => match e.neg_opt() {
+                        Some(ee) => Some(ee),
+                        None => Some(_neg(e)),
+                    },
+                    None => match self.mul_opt(&r.expr) {
+                        Some(e) => match e.neg_opt() {
+                            Some(ee) => Some(ee),
+                            None => Some(_neg(e)),
+                        },
+                        None => Some(_neg(_mul(self.clone(), r.expr.clone()))),
+                    }
+                }
+            }
+        }
 
         match self {
+            SymbolExpr::Unary(l) => l.mul_expand(rhs),
             SymbolExpr::Binary(l) => l.mul_expand(rhs),
             _ => None,
         }
@@ -592,6 +633,7 @@ impl SymbolExpr {
 
     fn div_expand(&self, rhs: &SymbolExpr) -> Option<SymbolExpr> {
         match self {
+            SymbolExpr::Unary(l) => l.div_expand(rhs),
             SymbolExpr::Binary(e) => e.div_expand(rhs),
             _ => self.div_opt(rhs),
         }
@@ -901,10 +943,24 @@ impl Symbol {
             } else {
                 None
             },
-            SymbolExpr::Unary(r) => if r.expr.get_symbols_string() < self.name {
-                Some(_mul(rhs.clone(), SymbolExpr::Symbol(self.clone())))
-            } else {
-                None
+            SymbolExpr::Unary(r) => match &r.op {
+                UnaryOps::Neg => match &r.expr {
+                    SymbolExpr::Value(v) => Some(_mul(SymbolExpr::Value(-v), SymbolExpr::Symbol(self.clone()))),
+                    SymbolExpr::Symbol(s) => if s.name < self.name {
+                        Some(_neg(_mul(rhs.clone(), SymbolExpr::Symbol(self.clone()))))
+                    } else {
+                        Some(_neg(_mul(SymbolExpr::Symbol(self.clone()), rhs.clone())))
+                    },
+                    SymbolExpr::Binary(_) => match self.mul_opt(&r.expr) {
+                        Some(e) => match e.neg_opt() {
+                            Some(ee) => Some(ee),
+                            None => Some(_neg(e)),
+                        },
+                        None => None,
+                    },
+                    _ => None,
+                }
+                _ => None,
             },
             _ => None,
         }
@@ -936,14 +992,7 @@ impl PartialEq for Symbol {
 impl Value {
     pub fn to_string(&self) -> String {
         match self {
-            Value::Real(e) => {
-                let t = e.floor() - e;
-                if t < f64::EPSILON && t > -f64::EPSILON {
-                    String::from(format!("{:.1}", e))
-                } else {
-                    e.to_string()
-                }
-            },
+            Value::Real(e) => e.to_string(),
             Value::Int(e) => e.to_string(),
             Value::Complex(e) => if e.re < f64::EPSILON && e.re > -f64::EPSILON {
                 if e.im < f64::EPSILON && e.im > -f64::EPSILON {
@@ -1241,14 +1290,20 @@ impl Value {
             SymbolExpr::Value(r) => Some(SymbolExpr::Value(self * r)),
             SymbolExpr::Unary(r) => match &r.op {
                 UnaryOps::Neg => match self.mul_opt(&r.expr) {
-                    Some(e) => Some(_neg(e)),
+                    Some(e) => match e.neg_opt() {
+                        Some(ee) => Some(ee),
+                        None => Some(_neg(e)),
+                    },
                     None => None,
-                }
+                },
                 _ => None,
             },
             SymbolExpr::Binary(r) => match &r.op {
                 BinaryOps::Mul => match self.mul_opt(&r.lhs) {
-                    Some(e) => Some(_mul(e, r.rhs.clone())),
+                    Some(e) => match e.mul_opt(&r.rhs) {
+                        Some(ee) => Some(ee),
+                        None => Some(_mul(e, r.rhs.clone())),
+                    },
                     None => match self.mul_opt(&r.rhs) {
                         Some(e) => Some(_mul(e, r.lhs.clone())),
                         None => None,
@@ -1672,7 +1727,10 @@ impl Unary {
     pub fn expand(&self) -> SymbolExpr {
         let expanded = self.expr.expand();
         match self.op {
-            UnaryOps::Neg => -&expanded,
+            UnaryOps::Neg => match expanded.neg_opt() {
+                Some(ne) => ne,
+                None => _neg(expanded),
+            },
             _ => SymbolExpr::Unary( Arc::new( Unary {op: self.op.clone(), expr: expanded})),
         }
     }
@@ -1741,23 +1799,86 @@ impl Unary {
     fn mul_opt(&self, rhs: &SymbolExpr) -> Option<SymbolExpr> {
         match self.op {
             UnaryOps::Neg => match self.expr.mul_opt(rhs) {
-                Some(e) => Some(_neg(e)),
+                Some(e) => match e.neg_opt() {
+                    Some(ee) => Some(ee),
+                    None => Some(_neg(e)),
+                },
                 None => None,
+            },
+            UnaryOps::Abs => match rhs {
+                SymbolExpr::Unary(r) => match &r.op {
+                    UnaryOps::Abs => match self.expr.mul_opt(&r.expr) {
+                        Some(e) => Some(SymbolExpr::Unary(Arc::new( Unary {op: UnaryOps::Abs, expr: e}))),
+                        None => Some(SymbolExpr::Unary(Arc::new( Unary {op: UnaryOps::Abs, expr: _mul(self.expr.clone(), r.expr.clone())}))),
+                    },
+                    _ => None,
+                },
+                _ => None,
             },
             _ => None,
         }       
+    }
+    fn mul_expand(&self, rhs: &SymbolExpr) -> Option<SymbolExpr> {
+        match self.op {
+            UnaryOps::Neg => match self.expr.mul_expand(&rhs) {
+                Some(e) => match e.neg_opt() {
+                    Some(ee) => Some(ee),
+                    None => Some(_neg(e)),
+                },
+                None => match self.expr.mul_opt(&rhs) {
+                    Some(e) => match e.neg_opt() {
+                        Some(ee) => Some(ee),
+                        None => Some(_neg(e)),
+                    },
+                    None => None,
+                }
+            },
+            _ => None,
+        }
     }
 
     // div with heuristic optimization
     fn div_opt(&self, rhs: &SymbolExpr) -> Option<SymbolExpr> {
         match self.op {
             UnaryOps::Neg => match self.expr.div_opt(rhs) {
-                Some(e) => Some(_neg(e)),
+                Some(e) => match e.neg_opt() {
+                    Some(ee) => Some(ee),
+                    None => Some(_neg(e)),
+                },
                 None => None,
+            },
+            UnaryOps::Abs => match rhs {
+                SymbolExpr::Unary(r) => match &r.op {
+                    UnaryOps::Abs => match self.expr.div_opt(&r.expr) {
+                        Some(e) => Some(SymbolExpr::Unary(Arc::new( Unary {op: UnaryOps::Abs, expr: e}))),
+                        None => Some(SymbolExpr::Unary(Arc::new( Unary {op: UnaryOps::Abs, expr: _div(self.expr.clone(), r.expr.clone())}))),
+                    },
+                    _ => None,
+                },
+                _ => None,
             },
             _ => None,
         }       
     }
+    fn div_expand(&self, rhs: &SymbolExpr) -> Option<SymbolExpr> {
+        match self.op {
+            UnaryOps::Neg => match self.expr.div_expand(&rhs) {
+                Some(e) => match e.neg_opt() {
+                    Some(ee) => Some(ee),
+                    None => Some(_neg(e)),
+                },
+                None => match self.expr.div_opt(&rhs) {
+                    Some(e) => match e.neg_opt() {
+                        Some(ee) => Some(ee),
+                        None => Some(_neg(e)),
+                    },
+                    None => None,
+                }
+            },
+            _ => None,
+        }
+    }
+
 
     pub fn print_tree(&self) {
         println!("Unary Node : {}", self.to_string());
@@ -2070,12 +2191,13 @@ impl Binary {
             if self.op == r.op {
                 if let BinaryOps::Mul | BinaryOps::Div | BinaryOps::Pow = self.op {
                     if let (SymbolExpr::Value(rv), SymbolExpr::Value(lv)) = (&self.lhs, &r.lhs) {
-                        if rv == &-lv {
-                            if self.rhs.expand().to_string() == r.rhs.expand().to_string() {
-                                return Some(SymbolExpr::Value(Value::Int(0)));
+                        if self.rhs.expand().to_string() == r.rhs.expand().to_string() {
+                            return match SymbolExpr::Value(rv + lv).mul_opt(&self.rhs) {
+                                Some(e) => Some(e),
+                                None => Some(_mul(SymbolExpr::Value(rv + lv), self.rhs.clone())),
                             }
                         }
-                    } 
+                    }
 
                     if let Some(e) = self.neg_opt() {
                         if self.expand().to_string() == e.expand().to_string() {
@@ -2163,9 +2285,10 @@ impl Binary {
             if self.op == r.op {
                 if let BinaryOps::Mul | BinaryOps::Div | BinaryOps::Pow = self.op {
                     if let (SymbolExpr::Value(rv), SymbolExpr::Value(lv)) = (&self.lhs, &r.lhs) {
-                        if rv == lv {
-                            if self.rhs.expand().to_string() == r.rhs.expand().to_string() {
-                                return Some(SymbolExpr::Value(Value::Int(0)));
+                        if self.rhs.expand().to_string() == r.rhs.expand().to_string() {
+                            return match SymbolExpr::Value(rv + lv).mul_opt(&self.rhs) {
+                                Some(e) => Some(e),
+                                None => Some(_mul(SymbolExpr::Value(rv + lv), self.rhs.clone())),
                             }
                         }
                     } 

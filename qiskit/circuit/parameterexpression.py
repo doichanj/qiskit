@@ -370,11 +370,15 @@ class ParameterExpression:
         Returns:
             A new expression describing the result of the operation.
         """
+        print("  OPR : ", op_code, self, other)
         self_expr = self._symbol_expr
         if isinstance(other, ParameterExpression):
             self._raise_if_parameter_names_conflict(other._names)
             parameter_symbols = {**self._parameter_symbols, **other._parameter_symbols}
             other_expr = other._symbol_expr
+        elif isinstance(other, numpy.complex128):
+            parameter_symbols = self._parameter_symbols.copy()
+            other_expr = complex(other)
         elif isinstance(other, numbers.Number) and numpy.isfinite(other):
             parameter_symbols = self._parameter_symbols.copy()
             other_expr = other
@@ -616,6 +620,7 @@ class ParameterExpression:
         Returns:
             bool: result of the comparison
         """
+        print("  EQ: ",self,other)
         if isinstance(other, ParameterExpression):
             if self.parameters != other.parameters:
                 return False
