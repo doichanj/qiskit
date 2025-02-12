@@ -370,7 +370,6 @@ class ParameterExpression:
         Returns:
             A new expression describing the result of the operation.
         """
-        print("  OPR : ", op_code, self, other)
         self_expr = self._symbol_expr
         if isinstance(other, ParameterExpression):
             self._raise_if_parameter_names_conflict(other._names)
@@ -620,7 +619,6 @@ class ParameterExpression:
         Returns:
             bool: result of the comparison
         """
-        print("  EQ: ",self,other)
         if isinstance(other, ParameterExpression):
             if self.parameters != other.parameters:
                 return False
