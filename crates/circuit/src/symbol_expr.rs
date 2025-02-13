@@ -337,7 +337,8 @@ impl SymbolExpr {
             },
             SymbolExpr::Binary(b) => match b.op {
                 BinaryOps::Mul | BinaryOps::Div => b.lhs.is_negative() ^ b.rhs.is_negative(),
-                _ => false, // TO DO add heuristic determination for pow (sign for add and sub are not defined)
+                BinaryOps::Add | BinaryOps::Sub => b.lhs.is_negative(),
+                _ => false, // TO DO add heuristic determination for pow
             }
         }
     }
@@ -906,15 +907,19 @@ impl PartialOrd for SymbolExpr {
             SymbolExpr::Symbol(l) => match rhs {
                 SymbolExpr::Value(_) => Some(Ordering::Greater),
                 SymbolExpr::Symbol(r) => l.name.partial_cmp(&r.name),
+                SymbolExpr::Unary(r) => self.partial_cmp(&r.expr),
                 _ => Some(Ordering::Less),
             },
             SymbolExpr::Unary(l) => match rhs {
-                SymbolExpr::Value(_) | SymbolExpr::Symbol(_) => Some(Ordering::Greater),
+                SymbolExpr::Value(_) => Some(Ordering::Greater),
                 SymbolExpr::Unary(r) => l.expr.partial_cmp(&r.expr),
-                SymbolExpr::Binary(_) => l.expr.partial_cmp(&rhs),
+                _ => l.expr.partial_cmp(&rhs),
             },
             SymbolExpr::Binary(l) => match rhs {
-                SymbolExpr::Value(_) | SymbolExpr::Symbol(_) => Some(Ordering::Greater),
+                SymbolExpr::Value(_) | SymbolExpr::Symbol(_) => match l.op {
+                    BinaryOps::Mul | BinaryOps::Div | BinaryOps::Pow => Some(Ordering::Greater),
+                    _ => Some(Ordering::Equal),
+                },
                 SymbolExpr::Unary(r) => self.partial_cmp(&r.expr),
                 SymbolExpr::Binary(r) => {
                     let ls = match l.lhs {
@@ -1331,7 +1336,7 @@ impl Value {
         match self {
             Value::Real(r) => *r < 0.0,
             Value::Int(i) => *i < 0,
-            Value::Complex(c) => false,
+            Value::Complex(c) => (c.re < 0.0 && c.im < f64::EPSILON && c.im > -f64::EPSILON) || (c.im < 0.0 && c.re < f64::EPSILON && c.re > -f64::EPSILON),
         }
     }
 
@@ -1423,12 +1428,12 @@ impl Value {
         match rhs {
             SymbolExpr::Value(r) => Some(SymbolExpr::Value(self * r)),
             SymbolExpr::Unary(r) => match &r.op {
-                UnaryOps::Neg => match self.mul_opt(&r.expr) {
-                    Some(e) => match e.neg_opt() {
-                        Some(ee) => Some(ee),
-                        None => Some(_neg(e)),
-                    },
-                    None => None,
+                UnaryOps::Neg => {
+                    let l = SymbolExpr::Value(-self);
+                    match l.mul_opt(&r.expr) {
+                        Some(e) => Some(e),
+                        None => Some(_mul(l, r.expr.clone())),
+                    }
                 },
                 _ => None,
             },
