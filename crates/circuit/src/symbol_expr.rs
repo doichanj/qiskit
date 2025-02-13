@@ -87,12 +87,28 @@ pub struct Binary {
 // functions to make new expr 
 #[inline(always)]
 fn _add(lhs: SymbolExpr, rhs: SymbolExpr) ->  SymbolExpr {
-    SymbolExpr::Binary( Arc::new(Binary{ op: BinaryOps::Add, lhs: lhs, rhs: rhs} ))
+    if rhs.is_negative() {
+        match rhs.neg_opt() {
+            Some(e) => SymbolExpr::Binary( Arc::new(Binary{ op: BinaryOps::Sub, lhs: lhs, rhs: e} )),
+            None => SymbolExpr::Binary( Arc::new(Binary{ op: BinaryOps::Sub, lhs: lhs, rhs: _neg(rhs)} )),
+        }
+    } else {
+        SymbolExpr::Binary( Arc::new(Binary{ op: BinaryOps::Add, lhs: lhs, rhs: rhs} ))
+    }
 }
+
 #[inline(always)]
 fn _sub(lhs: SymbolExpr, rhs: SymbolExpr) ->  SymbolExpr {
-    SymbolExpr::Binary( Arc::new(Binary{ op: BinaryOps::Sub, lhs: lhs, rhs: rhs} ))
+    if rhs.is_negative() {
+        match rhs.neg_opt() {
+            Some(e) => SymbolExpr::Binary( Arc::new(Binary{ op: BinaryOps::Add, lhs: lhs, rhs: e} )),
+            None => SymbolExpr::Binary( Arc::new(Binary{ op: BinaryOps::Add, lhs: lhs, rhs: _neg(rhs)} )),
+        }
+    } else {
+        SymbolExpr::Binary( Arc::new(Binary{ op: BinaryOps::Sub, lhs: lhs, rhs: rhs} ))
+    }
 }
+
 #[inline(always)]
 fn _mul(lhs: SymbolExpr, rhs: SymbolExpr) ->  SymbolExpr {
     SymbolExpr::Binary( Arc::new(Binary{ op: BinaryOps::Mul, lhs: lhs, rhs: rhs} ))
@@ -310,6 +326,22 @@ impl SymbolExpr {
         }
     }
 
+    fn is_negative(&self) -> bool {
+        match self {
+            SymbolExpr::Value(v) => v.is_negative(),
+            SymbolExpr::Symbol(_) => false,
+            SymbolExpr::Unary(u) => match u.op {
+                UnaryOps::Abs => false,
+                UnaryOps::Neg => !u.expr.is_negative(),
+                _ => false, // TO DO add heuristic determination
+            },
+            SymbolExpr::Binary(b) => match b.op {
+                BinaryOps::Mul | BinaryOps::Div => b.lhs.is_negative() ^ b.rhs.is_negative(),
+                _ => false, // TO DO add heuristic determination for pow (sign for add and sub are not defined)
+            }
+        }
+    }
+
     pub fn abs(&self) -> SymbolExpr {
         match self {
             SymbolExpr::Value(l) => SymbolExpr::Value( l.clone().abs()),
@@ -385,13 +417,6 @@ impl SymbolExpr {
         } else if rhs.is_zero() {
             Some(self.clone())
         } else {
-            if let SymbolExpr::Value(_) = rhs {
-                return match rhs.add_opt(&self) {
-                    Some(e) => Some(e),
-                    None => Some(_add(rhs.clone(), self.clone())),
-                }
-            }
-
             match self {
                 SymbolExpr::Value(e) => e.add_opt(rhs),
                 SymbolExpr::Symbol(e) => e.add_opt(rhs),
@@ -451,13 +476,6 @@ impl SymbolExpr {
         } else if rhs.is_zero() {
             Some(self.clone())
         } else {
-            if let SymbolExpr::Value(r) = rhs {
-                return match SymbolExpr::Value(-r).add_opt(&self) {
-                    Some(e) => Some(e),
-                    None => Some(_add(SymbolExpr::Value(-r), self.clone())),
-                }
-            }
-
             match self {
                 SymbolExpr::Value(e) => e.sub_opt(rhs),
                 SymbolExpr::Symbol(e) => e.sub_opt(rhs),
@@ -831,7 +849,6 @@ impl PartialEq for SymbolExpr {
             (SymbolExpr::Binary(_) | SymbolExpr::Unary(_), SymbolExpr::Binary(_) | SymbolExpr::Unary(_)) => {
                 let ex_lhs = self.expand();
                 let ex_rhs = rexpr.expand();
-//                ex_lhs.to_string() == ex_rhs.to_string()
                 let t = &ex_lhs - &ex_rhs;
                 match t {
                     SymbolExpr::Value(v) => v.is_zero(),
@@ -840,7 +857,6 @@ impl PartialEq for SymbolExpr {
             },
             (SymbolExpr::Binary(_), _) => {
                 let ex_lhs = self.expand();
-//                ex_lhs.to_string() == rexpr.to_string()
 
                 let t = &ex_lhs - &rexpr;
                 match t {
@@ -850,7 +866,6 @@ impl PartialEq for SymbolExpr {
             },
             (_, SymbolExpr::Binary(_)) => {
                 let ex_rhs = rexpr.expand();
-//                ex_rhs.to_string() == self.to_string()
                 let t = self - &ex_rhs;
                 match t {
                     SymbolExpr::Value(v) => v.is_zero(),
@@ -968,12 +983,7 @@ impl Symbol {
                         }
                     }
                 }
-                
-                if r.expr.get_symbols_string() < self.name {
-                    Some(_add(rhs.clone(), SymbolExpr::Symbol(self.clone())))
-                } else {
-                    None
-                }
+                None
             },
             SymbolExpr::Binary(r) => match &r.op {
                 BinaryOps::Add => match self.add_opt(&r.lhs) {
@@ -1019,11 +1029,7 @@ impl Symbol {
             } else {
                 None
             },
-            SymbolExpr::Unary(r) => None,/*if r.expr.get_symbols_string() < self.name {
-                Some(_add(_neg(rhs.clone()), SymbolExpr::Symbol(self.clone())))
-            } else {
-                None
-            },*/
+            SymbolExpr::Unary(r) => None,
             SymbolExpr::Binary(r) => match &r.op {
                 BinaryOps::Add => match self.sub_opt(&r.lhs) {
                     // self - r.lhs - r.rhs
