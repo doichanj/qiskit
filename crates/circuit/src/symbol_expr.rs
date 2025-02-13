@@ -1091,9 +1091,9 @@ impl Symbol {
                 UnaryOps::Neg => match &r.expr {
                     SymbolExpr::Value(v) => Some(_mul(SymbolExpr::Value(-v), SymbolExpr::Symbol(self.clone()))),
                     SymbolExpr::Symbol(s) => if s.name < self.name {
-                        Some(_neg(_mul(rhs.clone(), SymbolExpr::Symbol(self.clone()))))
+                        Some(_neg(_mul(r.expr.clone(), SymbolExpr::Symbol(self.clone()))))
                     } else {
-                        Some(_neg(_mul(SymbolExpr::Symbol(self.clone()), rhs.clone())))
+                        Some(_neg(_mul(SymbolExpr::Symbol(self.clone()), r.expr.clone())))
                     },
                     SymbolExpr::Binary(_) => match self.mul_opt(&r.expr) {
                         Some(e) => match e.neg_opt() {
