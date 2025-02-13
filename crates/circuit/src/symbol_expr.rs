@@ -552,9 +552,15 @@ impl SymbolExpr {
         } else if rhs.is_one() {
             Some(self.clone())
         } else if self.is_minus_one() {
-            Some(_neg(rhs.clone()))
+            match rhs.neg_opt() {
+                Some(e) => Some(e),
+                None => Some(_neg(rhs.clone())),
+            }
         } else if rhs.is_minus_one() {
-            Some(_neg(self.clone()))
+            match self.neg_opt() {
+                Some(e) => Some(e),
+                None => Some(_neg(self.clone())),
+            }
         } else {
             if let SymbolExpr::Value(_) | SymbolExpr::Symbol(_) = rhs {
                 if let SymbolExpr::Unary(_) = self {
@@ -661,7 +667,10 @@ impl SymbolExpr {
         } else if rhs.is_zero() {
             Some(self.clone())
         } else if rhs.is_minus_one() {
-            Some(_neg(self.clone()))
+            match self.neg_opt() {
+                Some(e) => Some(e),
+                None => Some(_neg(self.clone())),
+            }
         } else if *self == *rhs {
             let l_is_int = match self.is_int() {
                 Some(i) => i,
