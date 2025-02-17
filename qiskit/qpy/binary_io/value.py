@@ -20,6 +20,7 @@ import struct
 import uuid
 
 import numpy as np
+import symengine
 
 from qiskit.circuit import CASE_DEFAULT, Clbit, ClassicalRegister
 from qiskit.circuit.classical import expr, types
@@ -162,9 +163,12 @@ def _write_parameter_expression_v13(file_obj, obj, version):
 def _write_parameter_expression(file_obj, obj, use_symengine, *, version):
     extra_symbols = None
     if version < 13:
-        from sympy import srepr, sympify
+        if use_symengine:
+            expr_bytes = symengine.sympify(obj.sympify()).__reduce__()[1][0]
+        else:
+            from sympy import srepr, sympify
 
-        expr_bytes = srepr(obj.sympify()).encode(common.ENCODE)
+            expr_bytes = srepr(obj.sympify()).encode(common.ENCODE)
     else:
         with io.BytesIO() as buf:
             extra_symbols = _write_parameter_expression_v13(buf, obj, version)
