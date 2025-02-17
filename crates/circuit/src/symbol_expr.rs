@@ -2200,7 +2200,7 @@ impl Binary {
 
     pub fn bind(&self, maps: &HashMap<String, Value>) -> SymbolExpr {
         let new_lhs = self.lhs.bind(maps);
-        let new_rhs = self.lhs.bind(maps);
+        let new_rhs = self.rhs.bind(maps);
         match self.op {
             BinaryOps::Add => match new_lhs.add_opt(&new_rhs) {
                 Some(e) => e,
@@ -2224,7 +2224,7 @@ impl Binary {
 
     pub fn subs(&self, maps: &HashMap<String, SymbolExpr>) -> SymbolExpr {
         let new_lhs = self.lhs.subs(maps);
-        let new_rhs = self.lhs.subs(maps);
+        let new_rhs = self.rhs.subs(maps);
         match self.op {
             BinaryOps::Add => match new_lhs.add_opt(&new_rhs) {
                 Some(e) => e,
