@@ -442,9 +442,11 @@ def _read_parameter_expression_v3(file_obj, vectors, use_symengine):
     )
 
     payload = file_obj.read(data.expr_size)
-    from sympy.parsing.sympy_parser import parse_expr
-
-    expr_ = parse_expr(payload.decode(common.ENCODE))
+    if use_symengine:
+        expr_ = common.load_symengine_payload(payload)
+    else:
+        from sympy.parsing.sympy_parser import parse_expr
+        expr_ = parse_expr(payload.decode(common.ENCODE))
 
     symbol_map = {}
     for _ in range(data.map_elements):
