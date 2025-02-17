@@ -623,7 +623,8 @@ class ParameterExpression:
             if self.parameters != other.parameters:
                 return False
 
-            return self._symbol_expr == other._symbol_expr
+            return self.sympify().equals(other.sympify())
+#            return self._symbol_expr == other._symbol_expr
         elif isinstance(other, numbers.Number):
             return self._symbol_expr == other
         return False
