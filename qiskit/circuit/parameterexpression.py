@@ -24,6 +24,7 @@ import operator
 
 import numpy
 import qiskit._accelerate.circuit
+
 SymbolExpr = qiskit._accelerate.circuit.PySymbolExpr
 
 from qiskit.circuit.exceptions import CircuitError
@@ -123,7 +124,7 @@ class ParameterExpression:
             symbol_map (Dict[Parameter, [ParameterExpression, float, or int]]):
                 Mapping of :class:`Parameter` instances to the :class:`sympy.Symbol`
                 serving as their placeholder in expr.
-            expr (SymbolExpr or str): Expression with Rust's SymbolExprPy or string 
+            expr (SymbolExpr or str): Expression with Rust's SymbolExprPy or string
         """
         # NOTE: `Parameter.__init__` does not call up to this method, since this method is dependent
         # on `Parameter` instances already being initialized enough to be hashable.  If changing
@@ -133,13 +134,13 @@ class ParameterExpression:
             self._symbol_expr = expr
         else:
             # replace prefix for greek letters
-            re_expr = expr.replace('__pre_gl__', '$\\').replace('__pos_gl__', '$')
+            re_expr = expr.replace("__pre_gl__", "$\\").replace("__pos_gl__", "$")
 
             self._symbol_expr = SymbolExpr(re_expr)
             self._parameter_symbols = {}
             # reconstruct symbols from input parameters
             for param in symbol_map.keys():
-                re_name = param.name.replace('__pre_gl__', '$\\').replace('__pos_gl__', '$')
+                re_name = param.name.replace("__pre_gl__", "$\\").replace("__pos_gl__", "$")
                 self._parameter_symbols[param] = SymbolExpr.Symbol(re_name)
         self._name_map: dict | None = None
         self._parameter_keys = frozenset(p._hash_key() for p in self._parameter_symbols)
@@ -671,7 +672,7 @@ class ParameterExpression:
         if self._parameter_symbols:
             raise TypeError(
                 f"Expression with unbound parameters '{self.parameters}' is not numeric"
-            )      
+            )
         if self._symbol_expr.is_complex:
             return self._symbol_expr.complex()
         if self._symbol_expr.is_int:
@@ -694,8 +695,8 @@ class ParameterExpression:
 
         expr = str(self._symbol_expr)
         # replace prefix for greek letters
-        expr = expr.replace('$\\','__pre_gl__').replace('$','__pos_gl__')
-        
+        expr = expr.replace("$\\", "__pre_gl__").replace("$", "__pos_gl__")
+
         return sym.sympify(expr)
 
 

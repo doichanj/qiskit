@@ -19,6 +19,7 @@ from uuid import uuid4, UUID
 import numpy
 
 import qiskit._accelerate.circuit
+
 SymbolExpr = qiskit._accelerate.circuit.PySymbolExpr
 
 

@@ -253,6 +253,8 @@ impl PySymbolExpr {
                 Value::Int(r) => Ok(Self {expr: bound}),
                 Value::Complex(c) => if c.re == f64::INFINITY || c.im == f64::INFINITY {
                     Err(pyo3::exceptions::PyZeroDivisionError::new_err("zero division occurs while binding parameter"))
+                } else if c.im < f64::EPSILON && c.im > -f64::EPSILON {
+                    Ok(Self {expr: SymbolExpr::Value(Value::Real(c.re))})
                 } else {
                     Ok(Self {expr: bound})
                 },
@@ -280,6 +282,8 @@ impl PySymbolExpr {
                 Value::Int(r) => Ok(Self {expr: bound}),
                 Value::Complex(c) => if c.re == f64::INFINITY || c.im == f64::INFINITY {
                     Err(pyo3::exceptions::PyZeroDivisionError::new_err("zero division occurs while binding parameter"))
+                } else if c.im < f64::EPSILON && c.im > -f64::EPSILON {
+                    Ok(Self {expr: SymbolExpr::Value(Value::Real(c.re))})
                 } else {
                     Ok(Self {expr: bound})
                 },
