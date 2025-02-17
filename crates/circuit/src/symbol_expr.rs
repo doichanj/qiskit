@@ -2199,30 +2199,50 @@ impl Binary {
     }
 
     pub fn bind(&self, maps: &HashMap<String, Value>) -> SymbolExpr {
-        let new_expr = Binary{ op: self.op.clone(), lhs: self.lhs.bind(maps), rhs: self.rhs.bind(maps),};
-        match new_expr.clone().eval(false) {
-            Some(v) => SymbolExpr::Value(v),
-            None => match self.op {
-                BinaryOps::Add => new_expr.lhs + new_expr.rhs,
-                BinaryOps::Sub => new_expr.lhs - new_expr.rhs,
-                BinaryOps::Mul => new_expr.lhs * new_expr.rhs,
-                BinaryOps::Div => new_expr.lhs / new_expr.rhs,
-                BinaryOps::Pow => new_expr.lhs.pow(&new_expr.rhs),
-            }
+        let new_lhs = self.lhs.bind(maps);
+        let new_rhs = self.lhs.bind(maps);
+        match self.op {
+            BinaryOps::Add => match new_lhs.add_opt(&new_rhs) {
+                Some(e) => e,
+                None => _add(new_lhs, new_rhs),
+            },
+            BinaryOps::Sub => match new_lhs.sub_opt(&new_rhs) {
+                Some(e) => e,
+                None => _sub(new_lhs, new_rhs),
+            },
+            BinaryOps::Mul => match new_lhs.mul_opt(&new_rhs) {
+                Some(e) => e,
+                None => _mul(new_lhs, new_rhs),
+            },
+            BinaryOps::Div => match new_lhs.div_opt(&new_rhs) {
+                Some(e) => e,
+                None => _div(new_lhs, new_rhs),
+            },
+            BinaryOps::Pow => new_lhs.pow(&new_rhs),
         }
     }
 
     pub fn subs(&self, maps: &HashMap<String, SymbolExpr>) -> SymbolExpr {
-        let new_expr = Binary{ op: self.op.clone(), lhs: self.lhs.subs(maps), rhs: self.rhs.subs(maps),};
-        match new_expr.clone().eval(false) {
-            Some(v) => SymbolExpr::Value(v),
-            None => match self.op {
-                BinaryOps::Add => new_expr.lhs + new_expr.rhs,
-                BinaryOps::Sub => new_expr.lhs - new_expr.rhs,
-                BinaryOps::Mul => new_expr.lhs * new_expr.rhs,
-                BinaryOps::Div => new_expr.lhs / new_expr.rhs,
-                BinaryOps::Pow => new_expr.lhs.pow(&new_expr.rhs),
-            }
+        let new_lhs = self.lhs.subs(maps);
+        let new_rhs = self.lhs.subs(maps);
+        match self.op {
+            BinaryOps::Add => match new_lhs.add_opt(&new_rhs) {
+                Some(e) => e,
+                None => _add(new_lhs, new_rhs),
+            },
+            BinaryOps::Sub => match new_lhs.sub_opt(&new_rhs) {
+                Some(e) => e,
+                None => _sub(new_lhs, new_rhs),
+            },
+            BinaryOps::Mul => match new_lhs.mul_opt(&new_rhs) {
+                Some(e) => e,
+                None => _mul(new_lhs, new_rhs),
+            },
+            BinaryOps::Div => match new_lhs.div_opt(&new_rhs) {
+                Some(e) => e,
+                None => _div(new_lhs, new_rhs),
+            },
+            BinaryOps::Pow => new_lhs.pow(&new_rhs),
         }
     }
 
@@ -2333,7 +2353,7 @@ impl Binary {
                 Some(e) => e,
                 None => _sub(self.lhs.clone(), self.rhs.clone()),
             },
-            _ => _pow(self.lhs.expand(), self.rhs.expand()),
+            _ => _pow(self.lhs.expand(), self.rhs.expand()),    // TO DO : add expand for pow
         }
     }
 
