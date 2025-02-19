@@ -1,11 +1,6 @@
 ---
 name: Tests
-on:
-  push:
-    branches: [ main, 'stable/*' ]
-  pull_request:
-    branches: [ main, 'stable/*' ]
-  merge_group:
+on: push
 
 concurrency:
   group: ${{ github.repository }}-${{ github.ref }}-${{ github.head_ref }}

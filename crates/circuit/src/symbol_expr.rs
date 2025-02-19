@@ -252,12 +252,12 @@ impl SymbolExpr {
 
     pub fn rcp(self) -> SymbolExpr {
         match self {
-            SymbolExpr::Symbol(e) => SymbolExpr::Value( Value::Real(1.0)) / SymbolExpr::Symbol(e),
+            SymbolExpr::Symbol(e) => _div(SymbolExpr::Value(Value::Real(1.0)), SymbolExpr::Symbol(e)),
             SymbolExpr::Value(e) => SymbolExpr::Value(e.rcp()),
-            SymbolExpr::Unary(e) => SymbolExpr::Value( Value::Real(1.0)) / SymbolExpr::Unary(e),
+            SymbolExpr::Unary(e) => _div(SymbolExpr::Value( Value::Real(1.0)), SymbolExpr::Unary(e)),
             SymbolExpr::Binary(ref e) => match e.op {
                 BinaryOps::Div => SymbolExpr::Binary( Arc::new( Binary{ op: e.op.clone(), lhs: e.rhs.clone(), rhs: e.lhs.clone()}) ),
-                _ => SymbolExpr::Binary( Arc::new( Binary{ op: BinaryOps::Div, lhs: SymbolExpr::Value( Value::Real(1.0)), rhs: self.clone()}) ),
+                _ => _div(SymbolExpr::Value( Value::Real(1.0)), self.clone()),
             }
         }
     }
@@ -345,7 +345,7 @@ impl SymbolExpr {
 
     pub fn abs(&self) -> SymbolExpr {
         match self {
-            SymbolExpr::Value(l) => SymbolExpr::Value( l.clone().abs()),
+            SymbolExpr::Value(l) => SymbolExpr::Value( l.abs()),
             SymbolExpr::Unary(e) => match e.op {
                 UnaryOps::Abs | UnaryOps::Neg => e.expr.abs(),
                 _ => SymbolExpr::Unary( Arc::new(Unary{ op: UnaryOps::Abs, expr: self.clone()} )),
@@ -355,56 +355,56 @@ impl SymbolExpr {
     }
     pub fn sin(&self) -> SymbolExpr {
         match self {
-            SymbolExpr::Value(l) => SymbolExpr::Value( l.clone().sin()),
+            SymbolExpr::Value(l) => SymbolExpr::Value( l.sin()),
             _ => SymbolExpr::Unary( Arc::new(Unary{ op: UnaryOps::Sin, expr: self.clone()} )),
         }
     }
     pub fn asin(&self) -> SymbolExpr {
         match self {
-            SymbolExpr::Value(l) => SymbolExpr::Value( l.clone().asin()),
+            SymbolExpr::Value(l) => SymbolExpr::Value( l.asin()),
             _ => SymbolExpr::Unary( Arc::new(Unary{ op: UnaryOps::Asin, expr: self.clone()} )),
         }
     }
     pub fn cos(&self) -> SymbolExpr {
         match self {
-            SymbolExpr::Value(l) => SymbolExpr::Value( l.clone().cos()),
+            SymbolExpr::Value(l) => SymbolExpr::Value( l.cos()),
             _ => SymbolExpr::Unary( Arc::new(Unary{ op: UnaryOps::Cos, expr: self.clone()} )),
         }
     }
     pub fn acos(&self) -> SymbolExpr {
         match self {
-            SymbolExpr::Value(l) => SymbolExpr::Value( l.clone().acos()),
+            SymbolExpr::Value(l) => SymbolExpr::Value( l.acos()),
             _ => SymbolExpr::Unary( Arc::new(Unary{ op: UnaryOps::Acos, expr: self.clone()} )),
         }
     }
     pub fn tan(&self) -> SymbolExpr {
         match self {
-            SymbolExpr::Value(l) => SymbolExpr::Value( l.clone().tan()),
+            SymbolExpr::Value(l) => SymbolExpr::Value( l.tan()),
             _ => SymbolExpr::Unary( Arc::new(Unary{ op: UnaryOps::Tan, expr: self.clone()} )),
         }
     }
     pub fn atan(&self) -> SymbolExpr {
         match self {
-            SymbolExpr::Value(l) => SymbolExpr::Value( l.clone().atan()),
+            SymbolExpr::Value(l) => SymbolExpr::Value( l.atan()),
             _ => SymbolExpr::Unary( Arc::new(Unary{ op: UnaryOps::Atan, expr: self.clone()} )),
         }
     }
     pub fn exp(&self) -> SymbolExpr {
         match self {
-            SymbolExpr::Value(l) => SymbolExpr::Value( l.clone().exp()),
+            SymbolExpr::Value(l) => SymbolExpr::Value( l.exp()),
             _ => SymbolExpr::Unary( Arc::new(Unary{ op: UnaryOps::Exp, expr: self.clone()} )),
         }
     }
     pub fn log(&self) -> SymbolExpr {
         match self {
-            SymbolExpr::Value(l) => SymbolExpr::Value( l.clone().log()),
+            SymbolExpr::Value(l) => SymbolExpr::Value( l.log()),
             _ => SymbolExpr::Unary( Arc::new(Unary{ op: UnaryOps::Log, expr: self.clone()} )),
         }
     }
     pub fn pow(&self, rhs: &SymbolExpr) -> SymbolExpr {
         match self {
             SymbolExpr::Value(l) => match rhs {
-                SymbolExpr::Value(r) => SymbolExpr::Value( l.clone().pow(r.clone())),
+                SymbolExpr::Value(r) => SymbolExpr::Value( l.pow(r)),
                 _ => SymbolExpr::Binary( Arc::new(Binary{ op: BinaryOps::Pow, lhs: SymbolExpr::Value(l.clone()), rhs: rhs.clone()}) ),
             },
             _ => SymbolExpr::Binary( Arc::new(Binary{ op: BinaryOps::Pow, lhs: self.clone(), rhs: rhs.clone()} )),
@@ -800,11 +800,13 @@ impl Mul for SymbolExpr {
 impl Mul for &SymbolExpr {
     type Output = SymbolExpr;
     fn mul(self, rhs: Self) -> SymbolExpr {
+        /*
         if let SymbolExpr::Unary(r) = &rhs {
             if let UnaryOps::Neg = r.op {
                 return -(self * &r.expr);
             }
         }
+        */
         match self.mul_opt(rhs) {
             Some(e) => e,
             None => _mul(self.clone(), rhs.clone()),
@@ -822,11 +824,13 @@ impl Div for SymbolExpr {
 impl Div for &SymbolExpr {
     type Output = SymbolExpr;
     fn div(self, rhs: Self) -> SymbolExpr {
+        /*
         if let SymbolExpr::Unary(r) = &rhs {
             if let UnaryOps::Neg = r.op {
                 return -(self / &r.expr);
             }
         }
+        */
         match self.div_opt(rhs) {
             Some(e) => e,
             None => _div(self.clone(), rhs.clone()),
@@ -1237,31 +1241,31 @@ impl Value {
             Value::Complex(e) => Value::Complex(e.sqrt()),
         }
     }
-    pub fn pow(&self, p: Value) -> Value {
+    pub fn pow(&self, p: &Value) -> Value {
         match self {
             Value::Real(e) => match p {
                 Value::Real(r) => if *e < 0.0 {
-                    Value::Complex(Complex64::from(e).powf(r))
+                    Value::Complex(Complex64::from(e).powf(*r))
                 } else {
-                    Value::Real(e.powf(r))
+                    Value::Real(e.powf(*r))
                 },
                 Value::Int(i) => if *e < 0.0 {
-                    Value::Complex(Complex64::from(e).powf(i as f64))
+                    Value::Complex(Complex64::from(e).powf(*i as f64))
                 } else {
-                    Value::Real(e.powf(i as f64))
+                    Value::Real(e.powf(*i as f64))
                 },
-                Value::Complex(r) => Value::Complex(Complex64::from(e).powc(r)),
+                Value::Complex(r) => Value::Complex(Complex64::from(e).powc(*r)),
             },
             Value::Int(e) =>  if *e < 0 {
                 match p {
-                    Value::Real(r) => Value::Complex(Complex64::from(*e as f64).powf(r)),
-                    Value::Int(i) => Value::Complex(Complex64::from(*e as f64).powf(i as f64)),
-                    Value::Complex(c) => Value::Complex(Complex64::from(*e as f64).powc(c)),
+                    Value::Real(r) => Value::Complex(Complex64::from(*e as f64).powf(*r)),
+                    Value::Int(i) => Value::Complex(Complex64::from(*e as f64).powf(*i as f64)),
+                    Value::Complex(c) => Value::Complex(Complex64::from(*e as f64).powc(*c)),
                 }
             } else {
                 match p {
                     Value::Real(r) => {
-                        let t = (*e as f64).powf(r);
+                        let t = (*e as f64).powf(*r);
                         let d = t.floor() - t;
                         if d < f64::EPSILON && d >= -f64::EPSILON {
                             Value::Int(t as i64)
@@ -1269,18 +1273,18 @@ impl Value {
                             Value::Real(t)
                         }
                     },  
-                    Value::Int(r) => if r < 0 {
-                        Value::Real((*e as f64).powf(r as f64))
+                    Value::Int(r) => if *r < 0 {
+                        Value::Real((*e as f64).powf(*r as f64))
                     } else {
-                        Value::Int(e.pow(r as u32))
+                        Value::Int(e.pow(*r as u32))
                     },
-                    Value::Complex(r) => Value::Complex(Complex64::from(*e as f64).powc(r)),
+                    Value::Complex(r) => Value::Complex(Complex64::from(*e as f64).powc(*r)),
                 }
             },
             Value::Complex(e) => match p {
-                Value::Real(r) => Value::Complex(e.powf(r)),
-                Value::Int(r) => Value::Complex(e.powf(r as f64)),
-                Value::Complex(r) => Value::Complex(e.powc(r)),
+                Value::Real(r) => Value::Complex(e.powf(*r)),
+                Value::Int(r) => Value::Complex(e.powf(*r as f64)),
+                Value::Complex(r) => Value::Complex(e.powc(*r)),
             },
         }
     }
@@ -1890,13 +1894,13 @@ impl Unary {
     }
 
     pub fn expand(&self) -> SymbolExpr {
-        let expanded = self.expr.expand();
+        let ex = self.expr.expand();
         match self.op {
-            UnaryOps::Neg => match expanded.neg_opt() {
+            UnaryOps::Neg => match ex.neg_opt() {
                 Some(ne) => ne,
-                None => _neg(expanded),
+                None => _neg(ex),
             },
-            _ => SymbolExpr::Unary( Arc::new( Unary {op: self.op.clone(), expr: expanded})),
+            _ => SymbolExpr::Unary( Arc::new( Unary {op: self.op.clone(), expr: ex})),
         }
     }
 
@@ -2322,7 +2326,7 @@ impl Binary {
             BinaryOps::Sub => lval - rval,
             BinaryOps::Mul => lval * rval,
             BinaryOps::Div => lval / rval,
-            BinaryOps::Pow => lval.pow(rval),
+            BinaryOps::Pow => lval.pow(&rval),
         };
         match ret {
             Value::Real(_) => Some(ret),
