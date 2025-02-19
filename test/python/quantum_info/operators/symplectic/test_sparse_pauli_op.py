@@ -988,15 +988,23 @@ class TestSparsePauliOpMethods(QiskitTestCase):
             for i in range(num_ops)
         ]
         sum_op = SparsePauliOp.sum(ops)
+        print("  test 1")
         value = sum_op.to_matrix()
+        print("  test 2")
         target_operator = sum((op.to_matrix() for op in ops[1:]), ops[0].to_matrix())
+        print("  test 3")
         if param is not None:
             value = bind_parameters_to_one(value)
             target_operator = bind_parameters_to_one(target_operator)
+        print("  test 4")
         np.testing.assert_allclose(value, target_operator, atol=1e-8)
+        print("  test 5")
         target_spp_op = sum((op for op in ops[1:]), ops[0])
+        print("  test 6")
         self.assertEqual(sum_op, target_spp_op)
+        print("  test 7")
         np.testing.assert_array_equal(sum_op.paulis.phase, np.zeros(sum_op.size))
+        print("  test 8")
 
     def test_sum_error(self):
         """Test sum method with invalid cases."""
