@@ -309,10 +309,7 @@ impl PySymbolExpr {
             ParameterValue::Complex(c) => self.expr == SymbolExpr::Value( Value::from(c.clone())),
             ParameterValue::Int(r) => self.expr == SymbolExpr::Value( Value::from(r.clone())),
             ParameterValue::Str(s) => self.expr == parse_expression(&s),
-            ParameterValue::Expr(e) => {
-                println!("   ==========  EQ: {} == {} ",self.expr.to_string(),e.expr.to_string());
-                self.expr == e.expr
-            }
+            ParameterValue::Expr(e) => self.expr == e.expr,
         }
     }
     pub fn __ne__(&self, rhs: ParameterValue) -> bool {

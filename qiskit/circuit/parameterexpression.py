@@ -217,6 +217,7 @@ class ParameterExpression:
             A new expression parameterized by any parameters which were not bound by
             parameter_values.
         """
+        print(" ========= bind : ", parameter_values)
         if not allow_unknown_parameters:
             self._raise_if_passed_unknown_parameters(parameter_values.keys())
         self._raise_if_passed_nan(parameter_values)
@@ -371,6 +372,7 @@ class ParameterExpression:
         Returns:
             A new expression describing the result of the operation.
         """
+        print(" >>>>  OP : ", op_code, self, other)
         self_expr = self._symbol_expr
         if isinstance(other, ParameterExpression):
             self._raise_if_parameter_names_conflict(other._names)
