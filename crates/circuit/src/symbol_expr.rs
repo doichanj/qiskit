@@ -180,6 +180,7 @@ impl SymbolExpr {
     }
 
     pub fn expand(&self) -> SymbolExpr {
+        println!("  expand : {}",self.to_string());
         match self {
             SymbolExpr::Symbol(_) => self.clone(),
             SymbolExpr::Value(_) => self.clone(),
