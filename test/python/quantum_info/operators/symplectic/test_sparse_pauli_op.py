@@ -21,6 +21,8 @@ import rustworkx as rx
 import scipy.sparse
 import ddt
 
+import inspect
+
 from qiskit import QiskitError
 from qiskit.circuit import Parameter, ParameterExpression, ParameterVector
 from qiskit.circuit.library import efficient_su2
@@ -96,14 +98,16 @@ class TestSparsePauliOpMethods(QiskitTestCase):
     @combine(num_qubits=[1, 2, 3, 4], num_ops=[1, 2, 3, 4], param=[None, "a"])
     def test_sum(self, num_qubits, num_ops, param):
         """Test sum method for {num_qubits} qubits with {num_ops} operators."""
-        print("  test num_qubits = ", num_qubits,num_ops,param)
+        print("  >>>>>>  test num_qubits = ", num_qubits,num_ops,param, inspect.currentframe().f_code.co_name)
         ops = [
             self.random_spp_op(
                 num_qubits, 2**num_qubits, param if param is None else f"{param}_{i}"
             )
             for i in range(num_ops)
         ]
+        print("  =========  random_spp =====================", num_qubits,num_ops,param)
         sum_op = SparsePauliOp.sum(ops)
+        print("  =========  sum_op =====================", num_qubits,num_ops,param)
         value = sum_op.to_matrix()
         print("  =========  value =====================", num_qubits,num_ops,param)
         target_operator = sum((op.to_matrix() for op in ops[1:]), ops[0].to_matrix())
