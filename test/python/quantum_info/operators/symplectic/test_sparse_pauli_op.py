@@ -110,8 +110,9 @@ class TestSparsePauliOpMethods(QiskitTestCase):
         print("  =========  sum_op =====================", num_qubits,num_ops,param)
         value = sum_op.to_matrix()
         print("  =========  value =====================", num_qubits,num_ops,param)
-        for op in ops:
-            print(op.to_matrix())
+        target_operator = ops[0].to_matrix()
+        for op in ops[1:]:
+            sum(op, target_operator)
 #        target_operator = sum((op.to_matrix() for op in ops[1:]), ops[0].to_matrix())
 #        print("  =========  target_operator =====================", num_qubits,num_ops,param)
 #        if param is not None:
