@@ -2001,6 +2001,7 @@ impl Unary {
 
     // Add with heuristic optimization
     fn add_opt(&self, rhs: &SymbolExpr) -> Option<SymbolExpr> {
+        return None;
         match rhs {
             SymbolExpr::Value(r) => match self.op {
                 UnaryOps::Neg => match &self.expr {
@@ -2105,6 +2106,7 @@ impl Unary {
     }
     // Sub with heuristic optimization
     fn sub_opt(&self, rhs: &SymbolExpr) -> Option<SymbolExpr> {
+        return None;
         match rhs {
             SymbolExpr::Value(r) => self.add_opt(&SymbolExpr::Value(-r)),
             SymbolExpr::Symbol(r) => match self.op {

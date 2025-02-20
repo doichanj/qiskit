@@ -36,8 +36,6 @@ mod rustworkx_core_vnext;
 use pyo3::prelude::*;
 use pyo3::types::{PySequence, PyTuple};
 
-#![recursion_limit = "512"]
-
 pub type BitType = u32;
 #[derive(Copy, Clone, Debug, Hash, Ord, PartialOrd, Eq, PartialEq, FromPyObject)]
 pub struct Qubit(pub BitType);
