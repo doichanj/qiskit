@@ -180,7 +180,6 @@ impl SymbolExpr {
     }
 
     pub fn expand(&self) -> SymbolExpr {
-        println!("  expand : {}",self.to_string());
         match self {
             SymbolExpr::Symbol(_) => self.clone(),
             SymbolExpr::Value(_) => self.clone(),
@@ -1175,56 +1174,104 @@ impl Value {
         match self {
             Value::Real(e) => Value::Real(e.sin()),
             Value::Int(e) => Value::Real((*e as f64).sin()),
-            Value::Complex(e) => Value::Complex(e.sin()),
+            Value::Complex(e) => {
+                let t = Value::Complex(e.sin());
+                match t.opt_complex() {
+                    Some(v) => v,
+                    None => t,
+                }
+            },
         }
     }
     pub fn asin(&self) -> Value {
         match self {
             Value::Real(e) => Value::Real(e.asin()),
             Value::Int(e) => Value::Real((*e as f64).asin()),
-            Value::Complex(e) => Value::Complex(e.asin()),
+            Value::Complex(e) => {
+                let t = Value::Complex(e.asin());
+                match t.opt_complex() {
+                    Some(v) => v,
+                    None => t,
+                }
+            },
         }
     }
     pub fn cos(&self) -> Value {
         match self {
             Value::Real(e) => Value::Real(e.cos()),
             Value::Int(e) => Value::Real((*e as f64).cos()),
-            Value::Complex(e) => Value::Complex(e.cos()),
+            Value::Complex(e) => {
+                let t = Value::Complex(e.cos());
+                match t.opt_complex() {
+                    Some(v) => v,
+                    None => t,
+                }
+            },
         }
     }
     pub fn acos(&self) -> Value {
         match self {
             Value::Real(e) => Value::Real(e.acos()),
             Value::Int(e) => Value::Real((*e as f64).acos()),
-            Value::Complex(e) => Value::Complex(e.acos()),
+            Value::Complex(e) => {
+                let t = Value::Complex(e.acos());
+                match t.opt_complex() {
+                    Some(v) => v,
+                    None => t,
+                }
+            },
         }
     }
     pub fn tan(&self) -> Value {
         match self {
             Value::Real(e) => Value::Real(e.tan()),
             Value::Int(e) => Value::Real((*e as f64).tan()),
-            Value::Complex(e) => Value::Complex(e.tan()),
+            Value::Complex(e) => {
+                let t = Value::Complex(e.tan());
+                match t.opt_complex() {
+                    Some(v) => v,
+                    None => t,
+                }
+            },
         }
     }
     pub fn atan(&self) -> Value {
         match self {
             Value::Real(e) => Value::Real(e.atan()),
             Value::Int(e) => Value::Real((*e as f64).atan()),
-            Value::Complex(e) => Value::Complex(e.atan()),
+            Value::Complex(e) => {
+                let t = Value::Complex(e.atan());
+                match t.opt_complex() {
+                    Some(v) => v,
+                    None => t,
+                }
+            },
         }
     }
     pub fn exp(&self) -> Value {
         match self {
             Value::Real(e) => Value::Real(e.exp()),
             Value::Int(e) => Value::Real((*e as f64).exp()),
-            Value::Complex(e) => Value::Complex(e.exp()),
+            Value::Complex(e) => {
+                let t = Value::Complex(e.exp());
+                match t.opt_complex() {
+                    Some(v) => v,
+                    None => t,
+                }
+            },
         }
     }
     pub fn log(&self) -> Value {
         match self {
             Value::Real(e) => Value::Real(e.ln()),
             Value::Int(e) => Value::Real((*e as f64).ln()),
-            Value::Complex(e) => Value::Complex(e.ln()),
+            Value::Complex(e) => {
+                let t = Value::Complex(e.ln());
+                match t.opt_complex() {
+                    Some(v) => v,
+                    None => t,
+                }
+            },
         }
     }
     pub fn sqrt(&self) -> Value {
@@ -1239,7 +1286,13 @@ impl Value {
                     Value::Real(t)
                 }
             },
-            Value::Complex(e) => Value::Complex(e.sqrt()),
+            Value::Complex(e) => {
+                let t = Value::Complex(e.sqrt());
+                match t.opt_complex() {
+                    Some(v) => v,
+                    None => t,
+                }
+            },
         }
     }
     pub fn pow(&self, p: &Value) -> Value {
@@ -1282,10 +1335,16 @@ impl Value {
                     Value::Complex(r) => Value::Complex(Complex64::from(*e as f64).powc(*r)),
                 }
             },
-            Value::Complex(e) => match p {
-                Value::Real(r) => Value::Complex(e.powf(*r)),
-                Value::Int(r) => Value::Complex(e.powf(*r as f64)),
-                Value::Complex(r) => Value::Complex(e.powc(*r)),
+            Value::Complex(e) => {
+                let t = match p {
+                    Value::Real(r) => Value::Complex(e.powf(*r)),
+                    Value::Int(r) => Value::Complex(e.powf(*r as f64)),
+                    Value::Complex(r) => Value::Complex(e.powc(*r)),
+                };
+                match t.opt_complex() {
+                    Some(v) => v,
+                    None => t,
+                }
             },
         }
     }
@@ -1503,6 +1562,17 @@ impl Value {
             _ => None,
         }
     }
+
+    fn opt_complex(&self) -> Option<Value> {
+        match self {
+            Value::Complex(c) => if c.im < f64::EPSILON && c.im > -f64::EPSILON {
+                Some(Value::Real(c.re))
+            } else {
+                None
+            },
+            _ => None,
+        }
+    }
 }
 
 impl From<f64> for Value {
@@ -1537,7 +1607,7 @@ impl Add for Value {
 impl Add for &Value {
     type Output = Value;
     fn add(self, rhs: Self) -> Value {
-        match self {
+        let t = match self {
             Value::Real(l) => match rhs {
                 Value::Real(r) => Value::Real(l + r),
                 Value::Int(r) => Value::Real(l + *r as f64),
@@ -1553,6 +1623,10 @@ impl Add for &Value {
                 Value::Int(r) => Value::Complex(l + *r as f64),
                 Value::Complex(r) => Value::Complex(l + r),
             },
+        };
+        match t.opt_complex() {
+            Some(v) => v,
+            None => t,
         }
     }
 }
@@ -1567,7 +1641,7 @@ impl Sub for Value {
 impl Sub for &Value {
     type Output = Value;
     fn sub(self, rhs: Self) -> Value {
-        match self {
+        let t= match self {
             Value::Real(l) => match rhs {
                 Value::Real(r) => Value::Real(l - r),
                 Value::Int(r) => Value::Real(l - *r as f64),
@@ -1583,6 +1657,10 @@ impl Sub for &Value {
                 Value::Int(r) => Value::Complex(l - *r as f64),
                 Value::Complex(r) => Value::Complex(l - r),
             },
+        };
+        match t.opt_complex() {
+            Some(v) => v,
+            None => t,
         }
     }
 }
@@ -1597,7 +1675,7 @@ impl Mul for Value {
 impl Mul for &Value {
     type Output = Value;
     fn mul(self, rhs: Self) -> Value {
-        match self {
+        let t = match self {
             Value::Real(l) => match rhs {
                 Value::Real(r) => Value::Real(l * r),
                 Value::Int(r) => Value::Real(l * *r as f64),
@@ -1613,6 +1691,10 @@ impl Mul for &Value {
                 Value::Int(r) => Value::Complex(l * *r as f64),
                 Value::Complex(r) => Value::Complex(l * r),
             },
+        };
+        match t.opt_complex() {
+            Some(v) => v,
+            None => t,
         }
     }
 }
@@ -1627,7 +1709,7 @@ impl Div for Value {
 impl Div for &Value {
     type Output = Value;
     fn div(self, rhs: Self) -> Value {
-        match self {
+        let t = match self {
             Value::Real(l) => match rhs {
                 Value::Real(r) => Value::Real(l / r),
                 Value::Int(r) => Value::Real(l / *r as f64),
@@ -1656,6 +1738,10 @@ impl Div for &Value {
                 Value::Int(r) => Value::Complex(l / *r as f64),
                 Value::Complex(r) => Value::Complex(l / r),
             },
+        };
+        match t.opt_complex() {
+            Some(v) => v,
+            None => t,
         }
     }
 }
