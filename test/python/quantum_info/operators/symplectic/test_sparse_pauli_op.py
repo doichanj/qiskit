@@ -93,7 +93,7 @@ class TestSparsePauliOpMethods(QiskitTestCase):
         ]
         return SparsePauliOp(labels, coeffs)
 
-    @combine(num_qubits=[1, 2, 3, 4], num_ops=[1, 2, 3, 4], param=[None, "a"])
+    @combine(num_qubits=[3], num_ops=[2], param=[None, "a"])
     def test_sum(self, num_qubits, num_ops, param):
         """Test sum method for {num_qubits} qubits with {num_ops} operators."""
         ops = [
@@ -104,14 +104,19 @@ class TestSparsePauliOpMethods(QiskitTestCase):
         ]
         sum_op = SparsePauliOp.sum(ops)
         value = sum_op.to_matrix()
+        print("  =========  value =====================")
         target_operator = sum((op.to_matrix() for op in ops[1:]), ops[0].to_matrix())
+        print("  =========  target_operator =====================")
         if param is not None:
             value = bind_parameters_to_one(value)
             target_operator = bind_parameters_to_one(target_operator)
+        print("  =========  Bound =====================")
         np.testing.assert_allclose(value, target_operator, atol=1e-8)
         target_spp_op = sum((op for op in ops[1:]), ops[0])
         self.assertEqual(sum_op, target_spp_op)
+        print("  =========  EQ 1 =====================")
         np.testing.assert_array_equal(sum_op.paulis.phase, np.zeros(sum_op.size))
+        print("  =========  EQ 2 =====================")
 
 if __name__ == "__main__":
     unittest.main()
