@@ -472,7 +472,6 @@ impl SymbolExpr {
 
     // Sub with heuristic optimization
     fn sub_opt(&self, rhs: &SymbolExpr) -> Option<SymbolExpr> {
-        return None;
         if self.is_zero() {
             Some(_neg(rhs.clone()))
         } else if rhs.is_zero() {
@@ -485,6 +484,7 @@ impl SymbolExpr {
                     Some(opt) => Some(opt),
                     None => match rhs { // swap nodes by sorting rule
                         SymbolExpr::Binary(r) =>  if let BinaryOps::Mul | BinaryOps::Div | BinaryOps::Pow = r.op {
+                            return None;
                             if rhs < self {
                                 match rhs.neg_opt() {
                                     Some(e) => Some(_add(e,self.clone())),
@@ -497,6 +497,7 @@ impl SymbolExpr {
                             None
                         },
                         _ => if rhs < self {
+                            return None;
                             match rhs.neg_opt() {
                                 Some(e) => Some(_add(e,self.clone())),
                                 None => Some(_add(_neg(rhs.clone()), self.clone())),
@@ -513,6 +514,7 @@ impl SymbolExpr {
                         // swap nodes by sorting rule
                         match rhs {
                             SymbolExpr::Binary(r) => if let BinaryOps::Mul | BinaryOps::Div | BinaryOps::Pow = r.op {
+                                return None;
                                 if rhs < self {
                                     match rhs.neg_opt() {
                                         Some(e) => Some(_add(e,self.clone())),
@@ -525,6 +527,7 @@ impl SymbolExpr {
                                 None
                             },
                             _ => if rhs < self {
+                                return None;
                                 match rhs.neg_opt() {
                                     Some(e) => Some(_add(e,self.clone())),
                                     None => Some(_add(_neg(rhs.clone()), self.clone())),
