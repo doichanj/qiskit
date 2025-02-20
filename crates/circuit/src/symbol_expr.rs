@@ -425,7 +425,6 @@ impl SymbolExpr {
                     Some(opt) => Some(opt),
                     None => match rhs { // swap nodes by sorting rule
                         SymbolExpr::Binary(r) =>  if let BinaryOps::Mul | BinaryOps::Div | BinaryOps::Pow = r.op {
-                            return None;
                             if rhs < self {
                                 Some(_add(rhs.clone(), self.clone()))
                             } else{
