@@ -413,6 +413,7 @@ impl SymbolExpr {
 
     // Add with heuristic optimization
     fn add_opt(&self, rhs: &SymbolExpr) -> Option<SymbolExpr> {
+        return None;
         if self.is_zero() {
             Some(rhs.clone())
         } else if rhs.is_zero() {
@@ -472,6 +473,7 @@ impl SymbolExpr {
 
     // Sub with heuristic optimization
     fn sub_opt(&self, rhs: &SymbolExpr) -> Option<SymbolExpr> {
+        return None;
         if self.is_zero() {
             Some(_neg(rhs.clone()))
         } else if rhs.is_zero() {
@@ -2464,7 +2466,6 @@ impl Binary {
     fn add_opt(&self, rhs: &SymbolExpr) -> Option<SymbolExpr> {
         if let SymbolExpr::Binary(r) = rhs {
             if self.op == r.op {
-                /*
                 if let BinaryOps::Mul | BinaryOps::Div | BinaryOps::Pow = self.op {
                     if let (SymbolExpr::Value(rv), SymbolExpr::Value(lv)) = (&self.lhs, &r.lhs) {
                         if self.rhs.expand().to_string() == r.rhs.expand().to_string() {
@@ -2481,7 +2482,6 @@ impl Binary {
                         }
                     }
                 }
-                */
             }
         }
 
