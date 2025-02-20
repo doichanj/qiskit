@@ -456,12 +456,12 @@ impl SymbolExpr {
                             } else {
                                 None
                             },
-                            _ => None,//if rhs < self {
-                            /*    Some(_add(rhs.clone(), self.clone()))
+                            _ => if rhs < self {
+                                Some(_add(rhs.clone(), self.clone()))
                             }
                             else {
                                 None
-                            },*/
+                            },
                         }
                     } else {
                         None
