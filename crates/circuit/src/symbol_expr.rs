@@ -2464,6 +2464,7 @@ impl Binary {
     fn add_opt(&self, rhs: &SymbolExpr) -> Option<SymbolExpr> {
         if let SymbolExpr::Binary(r) = rhs {
             if self.op == r.op {
+                /*
                 if let BinaryOps::Mul | BinaryOps::Div | BinaryOps::Pow = self.op {
                     if let (SymbolExpr::Value(rv), SymbolExpr::Value(lv)) = (&self.lhs, &r.lhs) {
                         if self.rhs.expand().to_string() == r.rhs.expand().to_string() {
@@ -2480,6 +2481,7 @@ impl Binary {
                         }
                     }
                 }
+                */
             }
         }
 
