@@ -93,9 +93,10 @@ class TestSparsePauliOpMethods(QiskitTestCase):
         ]
         return SparsePauliOp(labels, coeffs)
 
-    @combine(num_qubits=[3], num_ops=[2], param=[None, "a"])
+    @combine(num_qubits=[1, 2, 3, 4], num_ops=[1, 2, 3, 4], param=[None, "a"])
     def test_sum(self, num_qubits, num_ops, param):
         """Test sum method for {num_qubits} qubits with {num_ops} operators."""
+        print("  test num_qubits = ", num_qubits,num_ops)
         ops = [
             self.random_spp_op(
                 num_qubits, 2**num_qubits, param if param is None else f"{param}_{i}"
