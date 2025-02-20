@@ -2001,15 +2001,14 @@ impl Unary {
 
     // Add with heuristic optimization
     fn add_opt(&self, rhs: &SymbolExpr) -> Option<SymbolExpr> {
-        return None;
         match rhs {
             SymbolExpr::Value(r) => match self.op {
                 UnaryOps::Neg => match &self.expr {
                     SymbolExpr::Value(l) => Some(SymbolExpr::Value(r - l)),
-                    _ => match rhs.sub_opt(&self.expr) {
+                    _ => Some(_sub(rhs.clone(), self.expr.clone())), /*match rhs.sub_opt(&self.expr) {
                         Some(e) => Some(e),
                         None => Some(_sub(rhs.clone(), self.expr.clone())),
-                    },
+                    },*/
                 },
                 _ => Some(_add(rhs.clone(), SymbolExpr::Unary(Arc::new( Unary {op: self.op.clone(), expr: self.expr.clone()})))),
             },               
@@ -2021,12 +2020,12 @@ impl Unary {
                     } else {
                         None
                     },
-                    _ => match rhs.sub_opt(&self.expr) {
+                    _ => None,/*match rhs.sub_opt(&self.expr) {
                         Some(e) => Some(e),
                         None => Some(_sub(rhs.clone(), self.expr.clone())),
-                    },
+                    },*/
                 },
-                _ => Some(_add(rhs.clone(), SymbolExpr::Unary(Arc::new( Unary {op: self.op.clone(), expr: self.expr.clone()})))),
+                _ => None,//Some(_add(rhs.clone(), SymbolExpr::Unary(Arc::new( Unary {op: self.op.clone(), expr: self.expr.clone()})))),
             },
             SymbolExpr::Unary(r) => match (&self.op, &r.op) {
                 (UnaryOps::Neg, UnaryOps::Neg) => match self.expr.add_opt(&r.expr) {
@@ -2106,7 +2105,6 @@ impl Unary {
     }
     // Sub with heuristic optimization
     fn sub_opt(&self, rhs: &SymbolExpr) -> Option<SymbolExpr> {
-        return None;
         match rhs {
             SymbolExpr::Value(r) => self.add_opt(&SymbolExpr::Value(-r)),
             SymbolExpr::Symbol(r) => match self.op {
