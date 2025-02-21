@@ -1997,27 +1997,52 @@ impl Unary {
 
     // Add with heuristic optimization
     fn add_opt(&self, rhs: &SymbolExpr) -> Option<SymbolExpr> {
+        if let SymbolExpr::Binary(r) = rhs {
+            match &r.op {
+                BinaryOps::Add => match self.add_opt(&r.lhs) {
+                    // self + r.lhs + r.rhs
+                    Some(rl) => match rl.add_opt(&r.rhs) {
+                        Some(rr) => Some(rr),
+                        None => Some(_add(rl, r.rhs.clone())),
+                    },
+                    None => match self.add_opt(&r.rhs) {
+                        Some(rr) => match rr.add_opt(&r.lhs) {
+                            Some(rl) => Some(rl),
+                            None => Some(_add(rr, r.lhs.clone())),
+                        },
+                        None => None,
+                    },
+                },
+                BinaryOps::Sub => match self.add_opt(&r.lhs) {
+                    // self + r.lhs - r.rhs
+                    Some(rl) => match rl.sub_opt(&r.rhs) {
+                        Some(rr) => Some(rr),
+                        None => Some(_sub(rl, r.rhs.clone())),
+                    },
+                    None => match self.sub_opt(&r.rhs) {
+                        Some(rr) => match rr.add_opt(&r.lhs) {
+                            Some(rl) => Some(rl),
+                            None => Some(_add(rr, r.lhs.clone())),
+                        },
+                        None => None,
+                    },
+                },
+                _ => None,
+            };
+        }
+
+        if let UnaryOps::Neg = self.op {
+            if let Some(e) = self.expr.sub_opt(rhs) {
+                match e.neg_opt() {
+                    Some(ee) => Some(ee),
+                    None => Some(_neg(e)),
+                };
+            }
+        }
+        None
+/*
         match rhs {
-            SymbolExpr::Value(r) => match self.op {
-                UnaryOps::Neg => match &self.expr {
-                    SymbolExpr::Value(l) => Some(SymbolExpr::Value(r - l)),
-                    _ => match rhs.sub_opt(&self.expr) {
-                        Some(e) => Some(e),
-                        None => Some(_sub(rhs.clone(), self.expr.clone())),
-                    },
-                },
-                _ => Some(_add(rhs.clone(), SymbolExpr::Unary(Arc::new( Unary {op: self.op.clone(), expr: self.expr.clone()})))),
-            },
-            SymbolExpr::Symbol(r) => match self.op {
-                UnaryOps::Neg => match self.expr.sub_opt(rhs) {
-                    Some(e) => match e.neg_opt() {
-                        Some(ee) => Some(ee),
-                        None => Some(_neg(e)),
-                    },
-                    None => None,
-                },
-                _ => Some(_add(rhs.clone(), SymbolExpr::Unary(Arc::new( Unary {op: self.op.clone(), expr: self.expr.clone()})))),
-            },
+            SymbolExpr::Value(_) | SymbolExpr::Symbol(_) => Some(_add(rhs.clone(), SymbolExpr::Unary(Arc::new( Unary {op: self.op.clone(), expr: self.expr.clone()})))),
             SymbolExpr::Binary(r) => match &r.op {
                 BinaryOps::Add => match self.add_opt(&r.lhs) {
                     // self + r.lhs + r.rhs
@@ -2050,7 +2075,7 @@ impl Unary {
                 _ => None,
             },
             _ => None,
-        }
+        }*/
         /*
         match rhs {
             SymbolExpr::Value(r) => match self.op {
@@ -2157,18 +2182,51 @@ impl Unary {
     }
     // Sub with heuristic optimization
     fn sub_opt(&self, rhs: &SymbolExpr) -> Option<SymbolExpr> {
-        match rhs {
-            SymbolExpr::Value(r) => self.add_opt(&SymbolExpr::Value(-r)),
-            SymbolExpr::Symbol(r) => match self.op {
-                UnaryOps::Neg => match self.expr.add_opt(&rhs) {
-                    Some(e) => match e.neg_opt() {
-                        Some(ee) => Some(ee),
-                        None => Some(_neg(e)),
+        if let SymbolExpr::Binary(r) = rhs {
+            match &r.op {
+                BinaryOps::Add => match self.sub_opt(&r.lhs) {
+                    // self - r.lhs - r.rhs
+                    Some(rl) => match rl.sub_opt(&r.rhs) {
+                        Some(rr) => Some(rr),
+                        None => Some(_sub(rl, r.rhs.clone())),
                     },
-                    None => None,
+                    None => match self.sub_opt(&r.rhs) {
+                        Some(rr) => match rr.sub_opt(&r.lhs) {
+                            Some(rl) => Some(rl),
+                            None => Some(_sub(rr, r.lhs.clone())),
+                        },
+                        None => None,
+                    },
+                },
+                BinaryOps::Sub => match self.sub_opt(&r.lhs) {
+                    // self - r.lhs + r.rhs
+                    Some(rl) => match rl.add_opt(&r.rhs) {
+                        Some(rr) => Some(rr),
+                        None => Some(_add(rl, r.rhs.clone())),
+                    },
+                    None => match self.add_opt(&r.rhs) {
+                        Some(rr) => match rr.sub_opt(&r.lhs) {
+                            Some(rl) => Some(rl),
+                            None => Some(_sub(rr, r.lhs.clone())),
+                        },
+                        None => None,
+                    },
                 },
                 _ => None,
-            },
+            };
+        }
+        if let UnaryOps::Neg = self.op {
+            if let Some(e) = self.expr.add_opt(rhs) {
+                match e.neg_opt() {
+                    Some(ee) => Some(ee),
+                    None => Some(_neg(e)),
+                };
+            }
+        }
+        None
+        /*
+        match rhs {
+            SymbolExpr::Value(r) => self.add_opt(&SymbolExpr::Value(-r)),
             SymbolExpr::Binary(r) => match &r.op {
                 BinaryOps::Add => match self.sub_opt(&r.lhs) {
                     // self - r.lhs - r.rhs
@@ -2201,7 +2259,7 @@ impl Unary {
                 _ => None,
             },
             _ => None,
-        }
+        }*/
         /*match rhs {
             SymbolExpr::Value(r) => self.add_opt(&SymbolExpr::Value(-r)),
             SymbolExpr::Symbol(r) => match self.op {
