@@ -2008,6 +2008,16 @@ impl Unary {
                 },
                 _ => Some(_add(rhs.clone(), SymbolExpr::Unary(Arc::new( Unary {op: self.op.clone(), expr: self.expr.clone()})))),
             },
+            SymbolExpr::Symbol(r) => match self.op {
+                UnaryOps::Neg => match self.expr.sub_opt(rhs) {
+                    Some(e) => match e.neg_opt() {
+                        Some(ee) => Some(ee),
+                        None => Some(_neg(e)),
+                    },
+                    None => None,
+                },
+                _ => Some(_add(rhs.clone(), SymbolExpr::Unary(Arc::new( Unary {op: self.op.clone(), expr: self.expr.clone()})))),
+            },
             SymbolExpr::Binary(r) => match &r.op {
                 BinaryOps::Add => match self.add_opt(&r.lhs) {
                     // self + r.lhs + r.rhs
@@ -2149,6 +2159,16 @@ impl Unary {
     fn sub_opt(&self, rhs: &SymbolExpr) -> Option<SymbolExpr> {
         match rhs {
             SymbolExpr::Value(r) => self.add_opt(&SymbolExpr::Value(-r)),
+            SymbolExpr::Symbol(r) => match self.op {
+                UnaryOps::Neg => match self.expr.add_opt(&rhs) {
+                    Some(e) => match e.neg_opt() {
+                        Some(ee) => Some(ee),
+                        None => Some(_neg(e)),
+                    },
+                    None => None,
+                },
+                _ => None,
+            },
             SymbolExpr::Binary(r) => match &r.op {
                 BinaryOps::Add => match self.sub_opt(&r.lhs) {
                     // self - r.lhs - r.rhs
