@@ -2039,7 +2039,19 @@ impl Unary {
                 };
             }
         }
-        None
+        match rhs {
+            SymbolExpr::Unary(r) => if self.op == r.op {
+                let t = self.expr.expand() + r.expr.expand();
+                if t.is_zero() {
+                    Some(SymbolExpr::Value(Value::Int(0)))
+                } else {
+                    None
+                }
+            } else {
+                None
+            },
+            _ => None,
+        }
 /*
         match rhs {
             SymbolExpr::Value(_) | SymbolExpr::Symbol(_) => Some(_add(rhs.clone(), SymbolExpr::Unary(Arc::new( Unary {op: self.op.clone(), expr: self.expr.clone()})))),
@@ -2223,7 +2235,19 @@ impl Unary {
                 };
             }
         }
-        None
+        match rhs {
+            SymbolExpr::Unary(r) => if self.op == r.op {
+                let t = self.expr.expand() - r.expr.expand();
+                if t.is_zero() {
+                    Some(SymbolExpr::Value(Value::Int(0)))
+                } else {
+                    None
+                }
+            } else {
+                None
+            },
+            _ => None,
+        }
         /*
         match rhs {
             SymbolExpr::Value(r) => self.add_opt(&SymbolExpr::Value(-r)),
