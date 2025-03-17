@@ -306,6 +306,84 @@ pub unsafe extern "C" fn qk_circuit_append_barrier(
     ExitCode::Success
 }
 
+/// @ingroup QkCircuit
+/// Copy circuit
+///
+/// @param circuit A pointer to the circuit to be copied
+///
+/// @return A pointer to the copied circuit.
+///
+/// # Example
+///
+///     QkCircuit *qc = qk_circuit_new(100);
+///     QkCircuit *copied = qk_circuit_copy(qc);
+///
+/// # Safety
+///
+/// Behavior is undefined ``circuit`` is not a valid, non-null pointer to a ``QkCircuit``.
+#[no_mangle]
+#[cfg(feature = "cbinding")]
+pub unsafe extern "C" fn qk_circuit_copy(
+    circuit: *const CircuitData,
+) -> *mut CircuitData {
+    let circuit = unsafe { const_ptr_as_ref(circuit) };
+    Box::into_raw(Box::new(circuit.clone()))
+}
+
+
+/// @ingroup QkCircuit
+/// Compose circuit
+///
+/// @param target A pointer to the circuit to compose other circuit
+/// @param other A pointer to the circuit to be composed
+/// @param qubits A pointer to array of qubits used to map other circuit to target
+/// @param clbits A pointer to array of clbits used to map other circuit to target
+/// # Example
+///
+///     QkCircuit *qc = qk_circuit_new(100);
+///     QkCircuit *qc_sub = qk_circuit_new(2);
+///     qk_circuit_compose(qc, qc_sub, *[3, 2], *[3, 2]);
+///
+/// # Safety
+///
+/// Behavior is undefined ``circuit`` is not a valid, non-null pointer to a ``QkCircuit``.
+#[no_mangle]
+#[cfg(feature = "cbinding")]
+pub unsafe extern "C" fn qk_circuit_compose(
+    target: *mut CircuitData,
+    other: *const CircuitData,
+    qubits: *const u32,
+    clbits: *const u32,
+) -> ExitCode {
+    let target = unsafe { mut_ptr_as_ref(target) };
+    let other = unsafe { const_ptr_as_ref(other) };
+    let num_qubits = other.num_qubits();
+    let num_clbits = other.num_clbits();
+    let qubits: Vec<u32> = unsafe {
+        (0..num_qubits)
+            .map(|idx| *qubits.wrapping_add(idx as usize))
+            .collect()
+    };
+    let clbits: Vec<u32> = unsafe {
+        (0..num_clbits)
+            .map(|idx| *clbits.wrapping_add(idx as usize))
+            .collect()
+    };
+
+    for op in other.data() {
+        let qargs = other.get_qargs(op.qubits);
+        let qargs_vec: Vec<Qubit> = qargs.iter().map(|x| Qubit(qubits[x.0 as usize])).collect();
+        let cargs = other.get_cargs(op.clbits);
+        let cargs_vec: Vec<Clbit> = cargs.iter().map(|x| Clbit(clbits[x.0 as usize])).collect();
+        let params = op.params_view();
+
+        target.push_packed_operation(op.op.clone(), params, &qargs_vec, &cargs_vec);
+    }
+    ExitCode::Success
+}
+
+
+
 #[repr(C)]
 pub struct OpCount {
     name: *mut c_char,
