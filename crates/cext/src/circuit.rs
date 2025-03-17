@@ -323,13 +323,10 @@ pub unsafe extern "C" fn qk_circuit_append_barrier(
 /// Behavior is undefined ``circuit`` is not a valid, non-null pointer to a ``QkCircuit``.
 #[no_mangle]
 #[cfg(feature = "cbinding")]
-pub unsafe extern "C" fn qk_circuit_copy(
-    circuit: *const CircuitData,
-) -> *mut CircuitData {
+pub unsafe extern "C" fn qk_circuit_copy(circuit: *const CircuitData) -> *mut CircuitData {
     let circuit = unsafe { const_ptr_as_ref(circuit) };
     Box::into_raw(Box::new(circuit.clone()))
 }
-
 
 /// @ingroup QkCircuit
 /// Compose circuit
@@ -381,8 +378,6 @@ pub unsafe extern "C" fn qk_circuit_compose(
     }
     ExitCode::Success
 }
-
-
 
 #[repr(C)]
 pub struct OpCount {
