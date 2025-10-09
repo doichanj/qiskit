@@ -366,9 +366,8 @@ pub struct QPYHeader {
     pub qiskit_major_version: u8,
     pub qiskit_minor_version: u8,
     pub qiskit_patch_version: u8,
-    pub num_circuits: u8,
+    pub num_circuits: u64,
     pub encoding: u8,
-    pub program: u8,
 }
 
 #[derive(BinWrite)]
@@ -406,11 +405,12 @@ fn qpy_encode_header(buf: &mut Cursor<Vec<u8>>, num_circuits: usize) {
         qiskit_major_version: 2,
         qiskit_minor_version: 2,
         qiskit_patch_version: 0,
-        num_circuits: num_circuits as u8,
+        num_circuits: num_circuits as u64,
         encoding: b'p',
-        program: b'q',
     }
     .write(buf);
+
+    let _ = b'q'.write(buf);
 }
 
 // encode circuit to QPY binary
@@ -421,6 +421,9 @@ fn qpy_encode_circuit(buf: &mut Cursor<Vec<u8>>, circ: &CircuitData) {
         Err(_) => (b'i', 0i64.to_be_bytes().to_vec()),
     };
 
+    // dummy metadata
+    let dummy_json = "{}";
+
     // circuit header
     let _ = QPYCircuitHeader {
         name_size: 0,
@@ -428,7 +431,7 @@ fn qpy_encode_circuit(buf: &mut Cursor<Vec<u8>>, circ: &CircuitData) {
         global_phase_size: global_phase.1.len() as u16,
         num_qubits: circ.num_qubits() as u32,
         num_clbits: circ.num_clbits() as u32,
-        metadata_size: 0,
+        metadata_size: dummy_json.len() as u64,
         num_registers: circ.qregs().len() as u32 + circ.qregs().len() as u32,
         num_instructions: circ.data().len() as u64,
         num_vars: circ.identifiers().len() as u32,
@@ -437,6 +440,13 @@ fn qpy_encode_circuit(buf: &mut Cursor<Vec<u8>>, circ: &CircuitData) {
 
     // write global phase data
     let _ = global_phase.1.write(buf);
+
+    // write dummy metadata
+    let _ = dummy_json.as_bytes().to_vec().write(buf);
+
+    // custom instructions
+    // TO DO : implement if needed
+    let _ = 0u64.to_be_bytes().write(buf);
 
     // write registers
     qpy_encode_registers(buf, circ);
