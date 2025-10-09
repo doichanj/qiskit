@@ -11,8 +11,12 @@
 // that they have been altered from the originals.
 
 use binrw::BinWrite;
+use flate2::Compression;
+use flate2::write::ZlibEncoder;
 use num_complex::ComplexFloat;
+use std::ffi::{CString, c_char};
 use std::io::Cursor;
+use std::io::prelude::*;
 
 use qiskit_circuit::bit::Register;
 use qiskit_circuit::circuit_data::CircuitData;
@@ -155,64 +159,60 @@ pub struct QPYRegisterHeader {
     pub size: u32,
     pub name_size: u16,
     pub in_circuit: u8,
+    pub name: Vec<u8>,
+    pub indices: Vec<i64>,
 }
 
 // write registers
 fn qpy_encode_registers(buf: &mut Cursor<Vec<u8>>, circ: &CircuitData) {
     // write qregs
     for reg in circ.qregs() {
-        let mut indices = Vec::<i64>::with_capacity(reg.len());
+        let mut indices = Vec::<i64>::new();
         let mut is_in_circuit = true;
-        for (i, bit) in reg.bits().enumerate() {
+        for bit in reg.bits() {
             match circ.qubits().find(&bit) {
-                Some(b) => indices[i] = b.index() as i64,
+                Some(b) => indices.push(b.index() as i64),
                 None => {
-                    indices[i] = -1i64;
+                    indices.push(-1i64);
                     is_in_circuit = false;
                 }
             }
         }
-        let _ = QPYRegisterHeader {
+        let header = QPYRegisterHeader {
             register_type: b'q',
-            standalone: (reg.len() == circ.num_qubits()) as u8,
-            size: reg.len() as u32,
+            standalone: (indices.len() == circ.num_qubits()) as u8,
+            size: indices.len() as u32,
             name_size: reg.name().len() as u16,
             in_circuit: is_in_circuit as u8,
-        }
-        .write(buf);
-
-        let _ = reg.name().as_bytes().write(buf);
-        indices.iter().for_each(|i| {
-            let _ = i.to_be_bytes().write(buf);
-        });
+            name: reg.name().as_bytes().to_vec(),
+            indices,
+        };
+        let _ = header.write(buf);
     }
 
     // write cregs
     for reg in circ.cregs() {
-        let mut indices = Vec::<i64>::with_capacity(reg.len());
+        let mut indices = Vec::<i64>::new();
         let mut is_in_circuit = true;
-        for (i, bit) in reg.bits().enumerate() {
+        for bit in reg.bits() {
             match circ.clbits().find(&bit) {
-                Some(b) => indices[i] = b.index() as i64,
+                Some(b) => indices.push(b.index() as i64),
                 None => {
-                    indices[i] = -1i64;
+                    indices.push(-1i64);
                     is_in_circuit = false;
                 }
             }
         }
-        let _ = QPYRegisterHeader {
+        let header = QPYRegisterHeader {
             register_type: b'c',
-            standalone: (reg.len() == circ.num_clbits()) as u8,
-            size: reg.len() as u32,
+            standalone: (indices.len() == circ.num_clbits()) as u8,
+            size: indices.len() as u32,
             name_size: reg.name().len() as u16,
             in_circuit: is_in_circuit as u8,
-        }
-        .write(buf);
-
-        let _ = reg.name().as_bytes().write(buf);
-        indices.iter().for_each(|i| {
-            let _ = i.to_be_bytes().write(buf);
-        });
+            name: reg.name().as_bytes().to_vec(),
+            indices,
+        };
+        let _ = header.write(buf);
     }
 }
 
@@ -310,7 +310,7 @@ fn qpy_encode_instruction(buf: &mut Cursor<Vec<u8>>, circ: &CircuitData, inst: &
 
     // write instruction header
     // TO DO: implement conditional if conditional gates will be supported in C-API
-    let _ = QPYInstruction {
+    let header = QPYInstruction {
         name_size: gate_class_name.len() as u16,
         label_size: match inst.label() {
             Some(l) => l.len() as u16,
@@ -324,8 +324,8 @@ fn qpy_encode_instruction(buf: &mut Cursor<Vec<u8>>, circ: &CircuitData, inst: &
         conditional_value: 0,
         num_ctrl_qubits: num_ctrl_bits,
         ctrl_state: (1u32 << num_ctrl_bits) - 1,
-    }
-    .write(buf);
+    };
+    let _ = header.write(buf);
 
     // write class name
     let _ = gate_class_name.as_bytes().write(buf);
@@ -352,6 +352,7 @@ fn qpy_encode_instruction(buf: &mut Cursor<Vec<u8>>, circ: &CircuitData, inst: &
     for p in inst.params_view() {
         if let Ok((k, param_buf)) = qpy_encode_param(p) {
             let _ = k.write(buf);
+            let _ = (param_buf.len() as u64).to_be_bytes().write(buf);
             let _ = param_buf.write(buf);
         }
     }
@@ -425,18 +426,18 @@ fn qpy_encode_circuit(buf: &mut Cursor<Vec<u8>>, circ: &CircuitData) {
     let dummy_json = "{}";
 
     // circuit header
-    let _ = QPYCircuitHeader {
+    let header = QPYCircuitHeader {
         name_size: 0,
         global_phase_type: global_phase.0,
         global_phase_size: global_phase.1.len() as u16,
         num_qubits: circ.num_qubits() as u32,
         num_clbits: circ.num_clbits() as u32,
         metadata_size: dummy_json.len() as u64,
-        num_registers: circ.qregs().len() as u32 + circ.qregs().len() as u32,
+        num_registers: circ.qregs().len() as u32 + circ.cregs().len() as u32,
         num_instructions: circ.data().len() as u64,
         num_vars: circ.identifiers().len() as u32,
-    }
-    .write(buf);
+    };
+    let _ = header.write(buf);
 
     // write global phase data
     let _ = global_phase.1.write(buf);
@@ -444,12 +445,12 @@ fn qpy_encode_circuit(buf: &mut Cursor<Vec<u8>>, circ: &CircuitData) {
     // write dummy metadata
     let _ = dummy_json.as_bytes().to_vec().write(buf);
 
+    // write registers
+    qpy_encode_registers(buf, circ);
+
     // custom instructions
     // TO DO : implement if needed
     let _ = 0u64.to_be_bytes().write(buf);
-
-    // write registers
-    qpy_encode_registers(buf, circ);
 
     // write instructions
     for inst in circ.data() {
@@ -533,6 +534,64 @@ pub unsafe extern "C" fn qk_circuit_to_qpy(
     QkQPYContainer {
         qpy: Box::into_raw(buf) as *mut u8,
         len,
+    }
+}
+
+/// @ingroup QkCircuit
+/// Encode QPY for a list of QkCircuit
+///
+/// @param circuits A pointer to the list of circuits to be encoded as QPY format
+/// @param num_circuits number of QkCircuit in the list
+/// @param compress zlib compressed
+///
+/// @return encoded QPY binary data in ``QkQPYContainer`` struct
+///
+/// # Example
+/// ```c
+///     QkCircuit *qc = qk_circuit_new(10, 10);
+///     uint32_t qubit[1] = {0};
+///     qk_circuit_gate(qc, QkGate_H, qubit, NULL);
+///     QkQPYContainer* qpy = qk_circuit_to_qpy(&qc, 1);
+///
+///     qk_circuit_qpy_free(qpy);
+/// ```
+///
+/// # Safety
+/// The ``circuits`` should be valid pointer to the list of QkCircuit
+/// and all the QkCircuit pointer should be valid pointer
+/// The ``num_circuit`` should be no larger than the size of a list ``circuits``
+///
+/// Behavior is undefined if ``circuits`` is not a valid, non-null pointer to a ``QkCircuit``.
+#[unsafe(no_mangle)]
+#[cfg(feature = "cbinding")]
+pub unsafe extern "C" fn qk_circuit_to_qpy_as_str(
+    circuits: *const *const CircuitData,
+    num_circuits: usize,
+    compress: bool,
+) -> *mut c_char {
+    // SAFETY: Per documentation, the pointer is non-null and aligned.
+    let circuits = unsafe {
+        std::slice::from_raw_parts(circuits, num_circuits)
+            .iter()
+            .map(|circ| const_ptr_as_ref(*circ))
+    };
+    let mut buf = Cursor::new(Vec::<u8>::new());
+
+    qpy_encode_header(&mut buf, circuits.len());
+    for circ in circuits {
+        qpy_encode_circuit(&mut buf, circ);
+    }
+
+    let base64 = base64_simd::STANDARD;
+    if compress {
+        let mut zlib = ZlibEncoder::new(Vec::new(), Compression::default());
+        zlib.write_all(&buf.into_inner()).unwrap();
+        let compressed_qpy = zlib.finish().unwrap();
+        let out = CString::new(base64.encode_to_string(compressed_qpy)).unwrap();
+        out.into_raw()
+    } else {
+        let out = CString::new(base64.encode_to_string(buf.into_inner())).unwrap();
+        out.into_raw()
     }
 }
 

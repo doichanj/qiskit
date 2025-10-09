@@ -31,6 +31,8 @@ hashbrown.workspace = true
 rand.workspace = true
 rand_pcg.workspace = true
 binrw.workspace = true
+base64-simd.workspace = true
+flate2.workspace = true
 
 [build-dependencies]
 cbindgen = "0.29"
