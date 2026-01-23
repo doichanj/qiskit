@@ -11,6 +11,7 @@
 // that they have been altered from the originals.
 
 use std::ffi::{CStr, CString, c_char};
+use std::ptr::null_mut;
 
 use crate::exit_codes::ExitCode;
 use crate::pointers::{const_ptr_as_ref, mut_ptr_as_ref};
@@ -26,12 +27,14 @@ use qiskit_circuit::dag_circuit::DAGCircuit;
 use qiskit_circuit::instruction::Parameters;
 use qiskit_circuit::interner::Interner;
 use qiskit_circuit::operations::{
-    ArrayType, DelayUnit, Operation, Param, StandardGate, StandardInstruction, UnitaryGate,
+    ArrayType, DelayUnit, Operation, Param, StandardGate, StandardInstruction, UnitaryGate, ControlFlowInstruction, ControlFlow, OperationRef,
 };
 use qiskit_circuit::packed_instruction::{PackedInstruction, PackedOperation};
-use qiskit_circuit::{BlocksMode, Clbit, Qubit, VarsMode};
+use qiskit_circuit::{Block, BlocksMode, Clbit, Qubit, VarsMode};
 
 use smallvec::smallvec;
+
+use crate::dag::COperationKind;
 
 /// @ingroup QkCircuit
 /// Construct a new circuit with the given number of qubits and clbits.
@@ -1183,16 +1186,16 @@ pub unsafe extern "C" fn qk_circuit_delay(
 ///     QkQuantumRegister *qr = qk_quantum_register_new(3, "qr");
 ///     qk_circuit_add_quantum_register(qc, qr);
 ///     qk_quantum_register_free(qr);
-///     
+///
 ///     QkDag *dag = qk_circuit_to_dag(qc);
-///     
+///
 ///     qk_dag_free(dag);
 ///     qk_circuit_free(qc);
 /// ```
 ///
 /// # Safety
 ///
-/// Behavior is undefined if ``circuit`` is not a valid, non-null pointer to a ``QkCircuit``.  
+/// Behavior is undefined if ``circuit`` is not a valid, non-null pointer to a ``QkCircuit``.
 #[unsafe(no_mangle)]
 #[cfg(feature = "cbinding")]
 pub unsafe extern "C" fn qk_circuit_to_dag(circuit: *const CircuitData) -> *mut DAGCircuit {
@@ -1304,3 +1307,241 @@ pub unsafe extern "C" fn qk_circuit_copy_empty_like(
         .expect("Failed to copy the circuit.");
     Box::into_raw(Box::new(copied_circuit))
 }
+
+/// @ingroup QkCircuit
+/// Append a box to the circuit.
+///
+/// @param circuit A pointer to the circuit to add the box to.
+/// @param body The quantum circuit to be added as a box.
+///
+/// @return An exit code.
+///
+/// # Example
+/// ```c
+///     QkCircuit *qc = qk_circuit_new(100, 1);
+///
+/// ```
+///
+/// # Safety
+///
+/// The length of the array ``qubits`` points to must be ``num_qubits``. If there is
+/// a mismatch the behavior is undefined.
+///
+/// Behavior is undefined if ``circuit`` is not a valid, non-null pointer to a ``QkCircuit``.
+#[unsafe(no_mangle)]
+#[cfg(feature = "cbinding")]
+pub unsafe extern "C" fn qk_circuit_box(
+    circuit: *mut CircuitData,
+    body: *const CircuitData,
+    qubits: *const u32,
+    num_qubits: u32,
+) -> ExitCode {
+    // SAFETY: Per documentation, the pointer is non-null and aligned.
+    let circuit = unsafe { mut_ptr_as_ref(circuit) };
+    // SAFETY: Per documentation, the pointer is non-null and aligned.
+    let body = unsafe { const_ptr_as_ref(body) };
+    // SAFETY: Per the documentation the qubits pointer is an array of num_qubits elements
+    let qubits: Vec<Qubit> = unsafe {
+        (0..num_qubits)
+            .map(|idx| Qubit(*qubits.wrapping_add(idx as usize))).collect()
+    };
+    let blocks = vec![circuit.add_block(body.clone())];
+
+    // Create PackedOperation -> push to circuit_data
+    let boxinst = Box::new(ControlFlowInstruction{control_flow: ControlFlow::Box { duration: None, annotations: Vec::new() }, num_qubits: body.num_qubits() as u32, num_clbits: body.num_clbits() as u32});
+    let op = PackedOperation::from_control_flow(boxinst);
+    let param = Parameters::<Block>::Blocks(blocks);
+    circuit
+        .push_packed_operation(op, Some(param), &qubits, &[])
+        .unwrap();
+    // Return success
+    ExitCode::Success
+}
+
+/// @ingroup QkCircuit
+/// Append if_test instruction to the circuit
+///
+/// @param circuit A pointer to the circuit to add the if_test to.
+/// @param true_body The quantum circuit to be added as a true body of if_test.
+/// @param false_body The quantum circuit to be added as a false body of if_test.
+///        if ``false_body`` is not null, if_else instruction is added.
+/// @param creg A pointer to classical register to be evaluated for test
+/// @param index an index to the bit in the classical register to be evaluated
+///
+/// @return An exit code.
+///
+/// # Example
+/// ```c
+///     QkCircuit *qc = qk_circuit_new(100, 1);
+///
+/// ```
+///
+/// # Safety
+///
+/// The length of the array ``qubits`` points to must be ``num_qubits``. If there is
+/// a mismatch the behavior is undefined.
+///
+/// Behavior is undefined if ``circuit``, ``true_boduy`` and ``false_body`` are not a valid, non-null pointer to a ``QkCircuit``.
+/// Behavior is undefined if ``creg`` is not a valid, non-null pointer to a ``QkClassicalRegister``.
+#[unsafe(no_mangle)]
+#[cfg(feature = "cbinding")]
+pub unsafe extern "C" fn qk_circuit_if_test(
+    circuit: *mut CircuitData,
+    true_body: *const CircuitData,
+    false_body: *const CircuitData,
+    qubits: *const u32,
+    num_qubits: u32,
+) -> ExitCode {
+    // SAFETY: Per documentation, the pointer is non-null and aligned.
+    let circuit = unsafe { mut_ptr_as_ref(circuit) };
+    // SAFETY: Per documentation, the pointer is non-null and aligned.
+    let true_body = unsafe { const_ptr_as_ref(true_body) };
+    // SAFETY: Per documentation, the pointer is non-null and aligned, or null.
+    let false_body = unsafe { const_ptr_as_ref(false_body) };
+    // SAFETY: Per the documentation the qubits pointer is an array of num_qubits elements
+    let qubits: Vec<Qubit> = unsafe {
+        (0..num_qubits)
+            .map(|idx| Qubit(*qubits.wrapping_add(idx as usize))).collect()
+    };
+    let blocks = vec![circuit.add_block(body.clone())];
+
+    // Create PackedOperation -> push to circuit_data
+    let boxinst = Box::new(ControlFlowInstruction{control_flow: ControlFlow::Box { duration: None, annotations: Vec::new() }, num_qubits: body.num_qubits() as u32, num_clbits: body.num_clbits() as u32});
+    let op = PackedOperation::from_control_flow(boxinst);
+    let param = Parameters::<Block>::Blocks(blocks);
+    circuit
+        .push_packed_operation(op, Some(param), &qubits, &[])
+        .unwrap();
+    // Return success
+    ExitCode::Success
+}
+
+
+/// @ingroup QkCircuit
+/// Return the operation kind for an instruction in the circuit.
+///
+/// This function is used to get the enum of operation kind for a given instruction in
+/// the circuit.
+///
+/// @param circuit A pointer to the circuit to get the instruction details for.
+/// @param index The instruction index to get the instruction details of.
+///
+/// @return An ``QkOperationKind`` enum for the instrcution.
+///
+/// # Example
+/// ```c
+///     QkCircuit *qc = qk_circuit_new(100, 0);
+///     uint32_t qubit[1] = {0};
+///     qk_circuit_gate(qc, QkGate_H, qubit, NULL);
+///     QkOperationKind type = qk_circuit_get_operation_kind(qc, 0);
+/// ```
+///
+/// # Safety
+///
+/// Behavior is undefined if ``circuit`` is not a valid, non-null pointer to a ``QkCircuit``. The
+/// value for ``index`` must be less than the value returned by ``qk_circuit_num_instructions``
+/// otherwise this function will panic.
+#[unsafe(no_mangle)]
+#[cfg(feature = "cbinding")]
+pub unsafe extern "C" fn qk_circuit_get_operation_kind(
+    circuit: *const CircuitData,
+    index: usize
+) -> COperationKind {
+    // SAFETY: Per documentation, `circuit` is a pointer to valid data.
+    let circuit = unsafe { const_ptr_as_ref(circuit) };
+
+    match circuit.data()[index].op.view() {
+        OperationRef::ControlFlow(_) => COperationKind::ControlFlow,
+        OperationRef::StandardGate(_) => COperationKind::Gate,
+        OperationRef::Unitary(_) => COperationKind::Unitary,
+        OperationRef::StandardInstruction(inst) => match inst {
+            StandardInstruction::Barrier(_) => COperationKind::Barrier,
+            StandardInstruction::Delay(_) => COperationKind::Delay,
+            StandardInstruction::Measure => COperationKind::Measure,
+            StandardInstruction::Reset => COperationKind::Reset,
+        }
+        _ => COperationKind::Unknown,
+    }
+}
+
+
+/// @ingroup QkCircuit
+/// Return the number of bodies for the instruction
+///
+/// This function is used to get the number of bodies in the control flow operations in the circuit.
+///
+/// @param circuit A pointer to the circuit to get the instruction details for.
+/// @param index The instruction index to get the instruction.
+///
+/// @return a number of bodies attached to the control flow operation. retunrs 0 if the instaruction
+///         is not control flow
+///
+/// # Example
+/// ```c
+///     QkCircuit *qc = qk_circuit_new(100, 0);
+/// ```
+///
+/// # Safety
+///
+/// Behavior is undefined if ``circuit`` is not a valid, non-null pointer to a ``QkCircuit``. The
+/// value for ``index`` must be less than the value returned by ``qk_circuit_num_instructions``
+/// otherwise this function will panic.
+#[unsafe(no_mangle)]
+#[cfg(feature = "cbinding")]
+pub unsafe extern "C" fn qk_circuit_num_bodies_in_instruction(
+    circuit: *const CircuitData,
+    index: usize
+) -> usize {
+    // SAFETY: Per documentation, `circuit` is a pointer to valid data.
+    let circuit = unsafe { const_ptr_as_ref(circuit) };
+
+    match circuit.data()[index].op.view() {
+        OperationRef::ControlFlow(_) => circuit.data()[index].blocks_view().len() as usize,
+        _ => 0,
+    }
+}
+
+/// @ingroup QkCircuit
+/// Return the body circuit for the control flow operation
+///
+/// This function is used to get the pointer to the copy of ``QkCircuit`` for the body
+/// attached to the control flow operation.
+///
+/// @param circuit A pointer to the circuit to get the instruction details for.
+/// @param index The instruction index to get the instruction.
+/// @param ibody The index to get the body circuit.
+///
+/// @return a pointer to the copy of the body circuit
+///
+/// # Example
+/// ```c
+///     QkCircuit *qc = qk_circuit_new(100, 0);
+/// ```
+///
+/// # Safety
+///
+/// Behavior is undefined if ``circuit`` is not a valid, non-null pointer to a ``QkCircuit``. The
+/// value for ``index`` must be less than the value returned by ``qk_circuit_num_instructions``
+/// value for ``ibody`` must be less than the value returned by ``qk_circuit_num_bodies_in_instruction``
+/// otherwise this function will panic.
+#[unsafe(no_mangle)]
+#[cfg(feature = "cbinding")]
+pub unsafe extern "C" fn qk_circuit_get_body_in_instruction(
+    circuit: *const CircuitData,
+    index: usize,
+    ibody: usize
+) ->  *mut CircuitData {
+    // SAFETY: Per documentation, `circuit` is a pointer to valid data.
+    let circuit = unsafe { const_ptr_as_ref(circuit) };
+
+    if let OperationRef::ControlFlow(_) = circuit.data()[index].op.view() {
+        let blocks = circuit.data()[index].blocks_view();
+        if ibody < blocks.len() {
+            if let Some(body) = circuit.blocks().get(blocks[ibody]) {
+                return Box::into_raw(Box::new(body.clone()));
+            }
+        }
+    }
+    null_mut()
+}
+
